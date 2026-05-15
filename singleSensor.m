@@ -13,7 +13,7 @@ start(myDaq, "Duration", seconds(0.05));
 %10 us trigger pulse
 write(myDaq, 1);
 pause(10e-6);
-write(dq, 0);
+write(myDaq, 0);
 
 %Collect recorded echo
 data = read(myDaq, "all");
