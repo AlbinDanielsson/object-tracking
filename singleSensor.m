@@ -1,40 +1,30 @@
 myDaq = daq("ni");
-myDaq.Rate = 100000;   % 100 kHz (10 µs resolution)
+myDaq.Rate = 100000;   % 100 kHz → 10 µs per sample
 
-% Add analog channels
-addoutput(myDaq, "myDAQ1", "ao0", "Voltage");   % Analog output
-addinput(myDaq,  "myDAQ1", "ai0", "Voltage");   % Analog input
+addoutput(myDaq, "myDAQ1", "ao0", "Voltage");
+addinput(myDaq,  "myDAQ1", "ai0", "Voltage");
 
-% Initialize output to 0 V
-write(myDaq, 0);
-pause(0.1);
+% Create waveform: 1 sample high (10 µs), rest low
+pulse = [5; zeros(4999,1)];   % total 5000 samples = 50 ms
 
-% Start acquisition (non-blocking)
-start(myDaq, "Duration", seconds(0.05));
+% Start acquisition + output together
+[data, time] = readwrite(myDaq, pulse);
 
-% Generate ~10 µs trigger pulse (e.g., 5 V)
-write(myDaq, 5);
-pause(10e-6);
-write(myDaq, 0);
-
-% Read captured data
-data = read(myDaq, "all");
-
-t = seconds(data.Time);
 echo = data{:,1};
+t = seconds(data.Time);
 
-% Convert analog signal to digital-like using threshold
-threshold = 2.5;   % midpoint (adjust based on your signal)
+% Thresholding
+threshold = 2.5;
 echoDigital = echo > threshold;
 
-% Detect edges
+% Edge detection
 idxRise = find(diff(echoDigital) == 1, 1, "first") + 1;
 idxFall = find(diff(echoDigital) == -1 & (1:length(diff(echoDigital)))' > idxRise, 1, "first") + 1;
 
 if isempty(idxRise) || isempty(idxFall)
     disp("No echo detected");
 else
-    echoTime = t(idxFall) - t(idxRise);   % seconds
+    echoTime = t(idxFall) - t(idxRise);
     distance_cm = echoTime * 1e6 / 58;
 
     fprintf("Echo time: %.1f us\n", echoTime*1e6);
