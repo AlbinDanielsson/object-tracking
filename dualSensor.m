@@ -10,7 +10,7 @@ addinput(myDaq,  "myDAQ1", "ai0", "Voltage"); % Sensor 1 ECHO
 addoutput(myDaq, "myDAQ1", "ao1", "Voltage"); % Sensor 2 TRIG
 addinput(myDaq,  "myDAQ1", "ai1", "Voltage"); % Sensor 2 ECHO
 
-cycleLength = 40000;   % 400 ms between triggers
+cycleLength = 400 * 100;   %400 ms between triggers
 repetitions = 3;
 triggerVoltage = 3;
 
