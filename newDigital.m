@@ -1,91 +1,68 @@
 clear; clc; close all;
 
 myDaq = daq("ni");
+myDaq.Rate = 100000; % match second script
 
-% Digital trigger outputs
-addoutput(myDaq, "myDAQ1", "port0/line0", "Digital"); % Sensor 1 TRIG
-addoutput(myDaq, "myDAQ1", "port0/line1", "Digital"); % Sensor 2 TRIG
+% Digital trigger output
+addoutput(myDaq, "myDAQ1", "port0/line0", "Digital");
 
-% Echo inputs
-addinput(myDaq, "myDAQ1", "ai0", "Voltage"); % Sensor 1 ECHO
-addinput(myDaq, "myDAQ1", "ai1", "Voltage"); % Sensor 2 ECHO
+% Echo input
+addinput(myDaq, "myDAQ1", "ai0", "Voltage");
 
 repetitions = 3;
 pauseBetweenTriggers = 0.4;   % 400 ms
 pulseLength = 0.001;          % 1 ms
 echoThresh = 2.0;
 
+% Storage
+allDistances = [];
+
+% Plot setup
 figure;
-
-subplot(3,1,1);
-hTrig1 = stairs(0,0,'LineWidth',1.5); hold on;
-hTrig2 = stairs(0,0,'LineWidth',1.5);
-xlabel('Sample');
-ylabel('Digital State');
-title('Trigger Signals');
-legend('Sensor 1 TRIG','Sensor 2 TRIG');
-ylim([-0.5 1.5]);
-grid on;
-
-subplot(3,1,2);
-hEcho1 = plot(0,0,'LineWidth',1.5);
+hPlot = plot(nan, nan, 'LineWidth', 1.5);
 xlabel('Sample');
 ylabel('Voltage (V)');
-title('Sensor 1 Echo');
-ylim([-0.5 5.5]);
+title('Live Echo Signal');
 grid on;
-
-subplot(3,1,3);
-hEcho2 = plot(0,0,'LineWidth',1.5);
-xlabel('Sample');
-ylabel('Voltage (V)');
-title('Sensor 2 Echo');
 ylim([-0.5 5.5]);
-grid on;
 
-write(myDaq, [false false]);
+write(myDaq, false);
 
-while ishandle(hEcho1)
+while ishandle(hPlot)
 
-    trigger1Log = [];
-    trigger2Log = [];
-    echo1Log = [];
-    echo2Log = [];
+    % Collect echo data window
+    echo = read(myDaq, seconds(0.05)); % 50 ms window
 
+    echoSignal = echo{:,1};
+
+    % Trigger pulses
     for k = 1:repetitions
-
-        % Sensor 1 trigger
-        write(myDaq, [true false]);
+        write(myDaq, true);
         pause(pulseLength);
-        write(myDaq, [false false]);
-
-        % Sensor 2 trigger
-        write(myDaq, [false true]);
-        pause(pulseLength);
-        write(myDaq, [false false]);
+        write(myDaq, false);
+        pause(0.01); % small spacing between pulses
     end
 
-    widths1 = getEchoWidths(echo1Log, echoThresh, repetitions);
-    widths2 = getEchoWidths(echo2Log, echoThresh, repetitions);
+    % Process echoes
+    widths = getEchoWidths(echoSignal, echoThresh, repetitions);
+    cm = widths / 5.8;
 
-    cm1 = widths1 / 5.8;
-    cm2 = widths2 / 5.8;
+    % Store results
+    allDistances = [allDistances; cm'];
 
-    fprintf('Sensor 1: %.1f %.1f %.1f cm | Sensor 2: %.1f %.1f %.1f cm\n', ...
-        cm1(1), cm1(2), cm1(3), cm2(1), cm2(2), cm2(3));
+    fprintf('Sensor 1: %.1f %.1f %.1f cm\n', ...
+        cm(1), cm(2), cm(3));
 
-    x = 1:numel(echo1Log);
-
-    set(hTrig1, 'XData', x, 'YData', trigger1Log);
-    set(hTrig2, 'XData', x, 'YData', trigger2Log);
-
-    set(hEcho1, 'XData', x, 'YData', echo1Log);
-    set(hEcho2, 'XData', x, 'YData', echo2Log);
+    % Update plot
+    set(hPlot, 'XData', 1:length(echoSignal), ...
+               'YData', echoSignal);
 
     drawnow;
+
+    pause(pauseBetweenTriggers);
 end
 
-write(myDaq, [false false]);
+write(myDaq, false);
 
 
 function echoWidths = getEchoWidths(echo, echoThresh, repetitions)
