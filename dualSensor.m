@@ -3,7 +3,7 @@ clc;
 
 myDaq = daq("ni");
 myDaq.Rate = 100000;   % 100 kHz → 10 us per sample
-l = 12; %cm
+l = 6; %cm
 
 addoutput(myDaq, "myDAQ1", "ao0", "Voltage"); % Sensor 1 TRIG
 addinput(myDaq,  "myDAQ1", "ai0", "Voltage"); % Sensor 1 ECHO
@@ -96,7 +96,7 @@ while ishandle(hEcho1)
     pos2 = triangle(cm1(2), cm2(2), l);
     pos3 = triangle(cm1(3), cm2(3), l);
 
-    fprintf('estimate 1:  %.1f %.1f | estimate 2:  %.1f %.1 | estimate 3:  %.1f %.1f\n ',...
+    fprintf('estimate 1:  %.1f %.1f | estimate 2:  %.1f %.1f | estimate 3:  %.1f %.1f \n ',...
         pos1(1), pos1(2), pos2(1), pos2(2), pos3(1), pos3(2));
 
     set(hEcho1, 'YData', echo1);
