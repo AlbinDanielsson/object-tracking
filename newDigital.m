@@ -56,37 +56,13 @@ while ishandle(hEcho1)
 
         % Sensor 1 trigger
         write(myDaq, [true false]);
-        logSample(1, 0);
-
         pause(pulseLength);
-
         write(myDaq, [false false]);
-        logSample(0, 0);
-
-        tic;
-        while toc < pauseBetweenTriggers
-            logSample(0, 0);
-        end
 
         % Sensor 2 trigger
         write(myDaq, [false true]);
-        logSample(0, 1);
-
         pause(pulseLength);
-
         write(myDaq, [false false]);
-        logSample(0, 0);
-
-        tic;
-        while toc < pauseBetweenTriggers
-            logSample(0, 0);
-        end
-    end
-
-    % Extra quiet time at end
-    tic;
-    while toc < pauseBetweenTriggers
-        logSample(0, 0);
     end
 
     widths1 = getEchoWidths(echo1Log, echoThresh, repetitions);
@@ -110,17 +86,6 @@ while ishandle(hEcho1)
 end
 
 write(myDaq, [false false]);
-
-
-function logSample(trig1, trig2)
-    d = evalin('caller', 'read(myDaq)');
-
-    assignin('caller', 'trigger1Log', [evalin('caller','trigger1Log'); trig1]);
-    assignin('caller', 'trigger2Log', [evalin('caller','trigger2Log'); trig2]);
-
-    assignin('caller', 'echo1Log', [evalin('caller','echo1Log'); d{1,1}]);
-    assignin('caller', 'echo2Log', [evalin('caller','echo2Log'); d{1,2}]);
-end
 
 
 function echoWidths = getEchoWidths(echo, echoThresh, repetitions)
