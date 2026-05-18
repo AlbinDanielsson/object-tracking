@@ -89,15 +89,8 @@ while ishandle(hEcho1)
 
     cm1 = widths1 / 5.8;
     cm2 = widths2 / 5.8;
-
-    %fprintf('Sensor 1: %.1f %.1f %.1f cm | Sensor 2: %.1f %.1f %.1f cm\n', ...
-    %   cm1(1), cm1(2), cm1(3), cm2(1), cm2(2), cm2(3));
-    pos1 = triangle(cm1(1), cm2(1), l);
-    pos2 = triangle(cm1(2), cm2(2), l);
-    pos3 = triangle(cm1(3), cm2(3), l);
-
-    fprintf('(%.1f, %.1f)\n(%.1f, %.1f)\n(%.1f, %.1f)\n\n', ...
-        pos1(1), pos1(2), pos2(1), pos2(2), pos3(1), pos3(2));
+    pos = triangle(median(cm1), median(cm2), l);
+    fprintf('(%.1f, %.1f)\n', pos(1), pos(2));
 
     set(hEcho1, 'YData', echo1);
     set(hEcho2, 'YData', echo2);
