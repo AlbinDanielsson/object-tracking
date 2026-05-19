@@ -90,7 +90,7 @@ while ishandle(hEcho1)
     cm1 = widths1 / 5.8;
     cm2 = widths2 / 5.8;
     pos = triangle(median(cm1), median(cm2), l);
-    fprintf('(%.1f, %.1f)\n', pos(1), pos(2));
+    fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f', pos(1), pos(2), median(cm1), median(cm2));
 
     set(hEcho1, 'YData', echo1);
     set(hEcho2, 'YData', echo2);
