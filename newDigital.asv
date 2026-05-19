@@ -2,26 +2,32 @@ clear; clc; close all;
 
 myDaq = daq("ni");
 
-%Digital trigger output
+%Digital trigger outputs
 addoutput(myDaq, "myDAQ1", "port0/line0", "Digital");
+addoutput(myDaq, "myDAQ1", "port0/line3", "Digital");
+addoutput(myDaq, "myDAQ1", "port0/line6", "Digital");
 
 %Digital input
 addinput(myDaq, "myDAQ1", "port0/line1", "Digital");
+addinput(myDaq, "myDAQ1", "port0/line4", "Digital");
+addinput(myDaq, "myDAQ1", "port0/line7", "Digital");
 
-%Initialize output
-write(myDaq, false);
+idleLen = 10; %Number
+pauseLen = 0.00001;
 
-triggerOne = repmat([1 0], 1, 50);
+idle = zeros(idleLen - 1, 1);
+
+triggerOne = repmat([1 0 0], 1, 50);
+triggerTwo = repmat([0 1 0], 1, 50);
+triggerThree = repmat([0 0 1], 1, 50);
 
 while true
+    for i = 1:1:numel(triggerOne)
+        pause(pauseLen);
 
-    pause(1);
+        write(myDaq, [triggerOne(i), triggerTwo(i), triggerThree(i)]);
 
-    write(myDaq, true);
-
-    in = read(myDaq, "OutputFormat", "matrix");
-    inputState = in(1);
-    disp("Input state: " + inputState);
+        in = read(myDaq, "OutputFormat", "matrix");
+        fprintf("Input state: %.1f %.1f %.1f \n", in(1), in(2), in(3));
+    end
 end
-
-write(myDaq, false);
