@@ -9,11 +9,8 @@ addoutput(myDaq, "myDAQ1", "port0/line6", "Digital");
 
 %Digital input
 addinput(myDaq, "myDAQ1", "port0/line1", "Digital");
-%addinput(myDaq, "myDAQ1", "port0/line4", "Digital");
-%addinput(myDaq, "myDAQ1", "port0/line7", "Digital");
-
-%Initialize output
-write(myDaq, false);
+addinput(myDaq, "myDAQ1", "port0/line4", "Digital");
+addinput(myDaq, "myDAQ1", "port0/line7", "Digital");
 
 duration = 150;
 pauseLen = 1;
@@ -28,8 +25,5 @@ for i = 1:1:duration
     write(myDaq, [triggerOne(i), triggerTwo(i), triggerThree(i)]);
 
     in = read(myDaq, "OutputFormat", "matrix");
-    inputState = in(1);
-    disp("Input state: " + inputState);
+    fprintf("Input state: %.1f %.1f %.1f \n", in(1), in(2), in(3));
 end
-
-write(myDaq, false);
