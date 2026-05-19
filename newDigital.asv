@@ -11,15 +11,13 @@ addinput(myDaq, "myDAQ1", "port0/line1", "Digital");
 %Initialize output
 write(myDaq, false);
 
-duration = 100;
-pauseLen = 1;
-
 triggerOne = repmat([1 0], 1, 50);
 
-for i = 1:1:duration
-    pause(pauseLen);
+while true
 
-    write(myDaq, triggerOne(i));
+    pause(1);
+
+    write(myDaq, true);
 
     in = read(myDaq, "OutputFormat", "matrix");
     inputState = in(1);
