@@ -92,10 +92,11 @@ while ishandle(hEcho1)
     %Remove 1000 cm, usually that is a error
     cm1 = cm1(cm1 <= 1000);
     cm2 = cm2(cm2 <= 1000);
-    if isEmpty(cm1)
+    if isempty(cm1)
+
         cm1 = [1000];
     end
-    if isEmpty(cm2)
+    if isempty(cm2)
         cm2 = [1000];
     end
 
@@ -110,9 +111,9 @@ while ishandle(hEcho1)
     distance = flatObjectDistance(r1, r2);
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
-    error1 = closestPointOnPlane(angle, r1);
-    error2 = closestPointOnPlane(angle, r2);
-    fprintf('e1 = %.1f, e2 = %.1f \n', error1, error2);
+    error1 = r1 - closestPointOnPlane(angle, r1);
+    error2 = r2 - closestPointOnPlane(angle, r2);
+    fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
 
     set(hEcho1, 'YData', echo1);
     set(hEcho2, 'YData', echo2);

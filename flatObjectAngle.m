@@ -3,4 +3,3 @@ function a = flatObjectAngle(r1, r2, l)
     delta_r = r1 - r2;
     a = atan2(delta_r, l);
 end
-
