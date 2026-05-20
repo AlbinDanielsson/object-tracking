@@ -78,7 +78,6 @@ grid on;
 echoThresh = 2;
 
 while ishandle(hEcho1)
-
     data = readwrite(myDaq, pulse);
 
     echo1 = data{:,1};
@@ -90,10 +89,11 @@ while ishandle(hEcho1)
     cm1 = widths1 / 5.8;
     cm2 = widths2 / 5.8;
     pos = triangle(median(cm1), median(cm2), l);
-    fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
+    %fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
+    fprintf('p1 %.1f cm', cm1);
 
-    angle = flatObjectAngle(cm1, cm2, l);
-    fprintf('angle %.1f \n \n', angle);
+    %angle = flatObjectAngle(cm1, cm2, l);
+    %fprintf('angle %.1f \n \n', angle);
 
     set(hEcho1, 'YData', echo1);
     set(hEcho2, 'YData', echo2);
