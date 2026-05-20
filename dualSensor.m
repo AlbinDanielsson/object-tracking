@@ -3,7 +3,7 @@ clc;
 
 myDaq = daq("ni");
 myDaq.Rate = 100000;   % 100 kHz → 10 us per sample
-l = 6; %cm
+l = 15.4; %cm
 
 addoutput(myDaq, "myDAQ1", "ao0", "Voltage"); % Sensor 1 TRIG
 addinput(myDaq,  "myDAQ1", "ai0", "Voltage"); % Sensor 1 ECHO
@@ -91,6 +91,9 @@ while ishandle(hEcho1)
     cm2 = widths2 / 5.8;
     pos = triangle(median(cm1), median(cm2), l);
     fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
+
+    angle = flatObjectAngle(cm1, cm2, l);
+    fprintf('angle %.1f \n \n', angle);
 
     set(hEcho1, 'YData', echo1);
     set(hEcho2, 'YData', echo2);
