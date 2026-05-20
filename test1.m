@@ -16,3 +16,5 @@ e2 = closestPointOnPlane(angle, r2);
 t = cos (angle);
 angle = angle * (180 / pi);
 
+A = [1, 5, 6, 2, 345739856, 6, 3, 1024];
+A = A(A <= 1000);

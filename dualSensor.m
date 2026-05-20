@@ -88,9 +88,21 @@ while ishandle(hEcho1)
 
     cm1 = widths1 / 5.8;
     cm2 = widths2 / 5.8;
+
+    %Remove 1000 cm, usually that is a error
+    cm1 = cm1(cm1 <= 1000);
+    cm2 = cm2(cm2 <= 1000);
+    if isEmpty(cm1)
+        cm1 = [1000];
+    end
+    if isEmpty(cm2)
+        cm2 = [1000];
+    end
+
     r1 = median(cm1);
     r2 = median(cm2);
-    pos = triangle(median(cm1), median(cm2), l);
+
+    pos = triangle(r1, r2, l);
     %fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
     fprintf('r1 = %.1f, r2 = %.1f \n', r1,r2);
 
