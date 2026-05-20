@@ -89,10 +89,12 @@ while ishandle(hEcho1)
     cm1 = widths1 / 5.8;
     cm2 = widths2 / 5.8;
     pos = triangle(median(cm1), median(cm2), l);
-    fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
+    %fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
+    fprintf('r1 = %.1f, r2 = %.1f \n', median(cm1), median(cm2));
 
-    angle = flatObjectAngle(r1, r2, l);
-    fprintf('angle %.1f \n \n', angle);
+    angle = flatObjectAngle(median(cm1), median(cm2), l);
+    distance = flatObjectDistance(median(cm1), median(cm2));
+    fprintf('angle %.1f, distance %.1f \n \n', angle * 180/pi, distance);
 
     set(hEcho1, 'YData', echo1);
     set(hEcho2, 'YData', echo2);
