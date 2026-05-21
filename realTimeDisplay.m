@@ -4,7 +4,7 @@ clc;
 %initial values
 l = 15.4; %cm
 objectWidth = 0.5; %m
-objectCenter = [0, 3];%m
+objectCenter = [0, 0.3];%m
 objectAngle = 0;%rads
 
 %%
@@ -19,7 +19,7 @@ addinput(myDaq,  "myDAQ1", "ai0", "Voltage"); % Sensor 1 ECHO
 addoutput(myDaq, "myDAQ1", "ao1", "Voltage"); % Sensor 2 TRIG
 addinput(myDaq,  "myDAQ1", "ai1", "Voltage"); % Sensor 2 ECHO
 
-cycleLength = 400 * 100;   %400 ms between triggers
+cycleLength = 40 * 100;   %40 ms between triggers
 repetitions = 3;
 triggerVoltage = 3;
 
@@ -84,7 +84,7 @@ for i = 1:length(xEdges)-1
     end
 end
 
-%Sensors
+%plot sensors
 plot(l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
 plot(-l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
 xlabel('x');
@@ -184,11 +184,16 @@ while true
     if isempty(cm2)
         cm2 = [1000];
     end
-
     r1 = median(cm1);
     r2 = median(cm2);
+    if r1 > 400 %Max distance
+        r1 = r2 + l; %Can't be further away than that
+    end
+    if r2 > 400
+        r2 = r1 + l; %
+    end
 
-    pos = triangle(r1, r2, l);
+    %pos = triangle(r1, r2, l);
     %fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
     fprintf('r1 = %.1f, r2 = %.1f \n', r1,r2);
 
@@ -208,29 +213,11 @@ while true
     R = R_base;
     predict(ekf);
     z = [r1/100; r2/100; angle];
-    z_pred = h(ekf.State);
     z_used = z;
-   
-    % Reject r1 if bad
-    if abs(z(1) - z_pred(1)) > 0.3
-        z_used(1) = z_pred(1);   % replace with prediction
-        R(1,1) = 100;            % ignore it
-    end
-    % Reject r2 if bad
-    if abs(z(2) - z_pred(2)) > 0.3
-        z_used(2) = z_pred(2);
-        R(2,2) = 100;
-    end
 
     ekf.MeasurementNoise = R;
 
     correct(ekf, z_used);
-    
-    x_est = ekf.State;
-    % Prevent nonsense states
-    if x_est(2) < 0 || x_est(2) > 5
-        ekf.State = [0; 2; 0; 0; 0; 0]; % reset
-    end
     objectCenter = x_est(1:2)';
     objectAngle = x_est(3);
 
