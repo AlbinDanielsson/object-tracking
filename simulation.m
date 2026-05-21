@@ -1,20 +1,20 @@
 clc, clear all
 l = 15.4; %cm
 
-objectWidth = 0.5; %m
-    objectCenter = [0, 3];%m
+objectWidth = 100; %m
+    objectCenter = [0, 300];%m
     objectAngle = 0;%rads
 
 figure;
 hold on;
 axis equal;
-xlim([-1 1]);
-ylim([0 4]);
+xlim([-100 100]);
+ylim([0 400]);
 
 %Checkerboard
-squareSize = 0.5;
-xEdges = -2:squareSize:2;
-yEdges = 0:squareSize:4;
+squareSize = 50;
+xEdges = -200:squareSize:200;
+yEdges = 0:squareSize:400;
 for i = 1:length(xEdges)-1
     for j = 1:length(yEdges)-1
         if mod(i+j,2) == 0
@@ -30,17 +30,17 @@ for i = 1:length(xEdges)-1
 end
 
 %Sensors
-plot(l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
-plot(-l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+plot(l/2, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+plot(-l/2, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
 xlabel('x');
 ylabel('y');
 box on;
-xSensor = [l/200, -l/200];
+xSensor = [l/2, -l/2];
 ySensor = [0, 0];
 for k = 1:length(xSensor)
 
     % Left and right cone boundary slopes
-    dx = 4 * tand(7.5);
+    dx = 400 * tand(7.5);
 
     xLeft  = xSensor(k) - dx;
     xRight = xSensor(k) + dx;
@@ -54,14 +54,14 @@ for k = 1:length(xSensor)
 
     patch( ...
         [xSensor(k), xLeft, xRight], ...
-        [0,          4,     4], ...
+        [0,          400,     400], ...
         coneColor, ...
         'FaceAlpha', 0.25, ...
         'EdgeColor', 'none');
 
     % Draw cone boundary lines up to y = 4
-    plot([xSensor(k), xLeft],  [0, 4], 'k-', 'LineWidth', 1);
-    plot([xSensor(k), xRight], [0, 4], 'k-', 'LineWidth', 1);
+    plot([xSensor(k), xLeft],  [0, 400], 'k-', 'LineWidth', 1);
+    plot([xSensor(k), xRight], [0, 400], 'k-', 'LineWidth', 1);
 end
 
 %% 

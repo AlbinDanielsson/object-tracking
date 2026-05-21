@@ -3,8 +3,8 @@ clc;
 
 %initial parameters
 l = 15.4; %cm
-objectWidth = 0.5; %m
-objectCenter = [0, 0.3];%m
+objectWidth = 100; %cm
+objectCenter = [0, 0.300];%cm
 objectAngle = 0;%rads
 
 %Velocity calculation
@@ -69,13 +69,13 @@ echoThresh = 2;
 figure;
 hold on;
 axis equal;
-xlim([-1 1]);
-ylim([0 4]);
+xlim([-100 100]);
+ylim([0 400]);
 
 %Checkerboard
-squareSize = 0.5;
-xEdges = -2:squareSize:2;
-yEdges = 0:squareSize:4;
+squareSize = 50;
+xEdges = -200:squareSize:200;
+yEdges = 0:squareSize:400;
 for i = 1:length(xEdges)-1
     for j = 1:length(yEdges)-1
         if mod(i+j,2) == 0
@@ -91,18 +91,18 @@ for i = 1:length(xEdges)-1
 end
 
 %plot sensors
-plot(l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
-plot(-l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+plot(l/2, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+plot(-l/2, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
 xlabel('x');
 ylabel('y');
 box on;
-xSensor = [l/200, -l/200];
+xSensor = [l/2, -l/2];
 ySensor = [0, 0];
 
 for k = 1:length(xSensor)
 
     % Left and right cone boundary slopes
-    dx = 4 * tand(7.5);
+    dx = 400 * tand(7.5);
 
     xLeft  = xSensor(k) - dx;
     xRight = xSensor(k) + dx;
@@ -116,14 +116,14 @@ for k = 1:length(xSensor)
 
     patch( ...
         [xSensor(k), xLeft, xRight], ...
-        [0,          4,     4], ...
+        [0,          400,     400], ...
         coneColor, ...
         'FaceAlpha', 0.25, ...
         'EdgeColor', 'none');
 
     % Draw cone boundary lines up to y = 4
-    plot([xSensor(k), xLeft],  [0, 4], 'k-', 'LineWidth', 1);
-    plot([xSensor(k), xRight], [0, 4], 'k-', 'LineWidth', 1);
+    plot([xSensor(k), xLeft],  [0, 400], 'k-', 'LineWidth', 1);
+    plot([xSensor(k), xRight], [0, 400], 'k-', 'LineWidth', 1);
 end
 % Initial object endpoints
 xObj = [objectCenter(1) - cos(objectAngle)*objectWidth/2, ...
@@ -150,8 +150,8 @@ f = @(x) [
 ];
 
 h = @(x) [
-    sqrt((x(1) - l/200)^2 + x(2)^2);
-    sqrt((x(1) + l/200)^2 + x(2)^2);
+    sqrt((x(1) - l/2)^2 + x(2)^2);
+    sqrt((x(1) + l/2)^2 + x(2)^2);
     x(3)
 ];
 
@@ -185,10 +185,10 @@ while true
     cm1 = cm1(cm1 <= 1000);
     cm2 = cm2(cm2 <= 1000);
     if isempty(cm1)
-        cm1 = [1000];
+        cm1 = [400];
     end
     if isempty(cm2)
-        cm2 = [1000];
+        cm2 = [400];
     end
     r1 = median(cm1);
     r2 = median(cm2);
@@ -208,20 +208,17 @@ while true
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
     %Expected readings, %TODO, verify
-    ePos = objectPosition + vel * dt;
+    ePos = objectCenter + vel * dt;
     eAngle = objectAngle + omega * dt;
-    eR1 = abs(objectCenter(2) + tan(theta) * (-l/200 - objectCenter(1)));
-    eR2 = abs(objectCenter(2) + tan(theta) * (l/200 - objectCenter(1)));
-    %eR1 = norm(ePos - [-l/200, 0]);
-    %eR2 = norm(ePos - [l/200, 0]);
+    eR1 = abs(ePos(2) + tan(eAngle) * (-l/2 - ePos(1)));
+    eR2 = abs(ePos(2) + tan(eAngle) * (l/2 - ePos(1)));
     eS1 = closestPointOnPlane(eAngle, eR1);
     eS2 = closestPointOnPlane(eAngle, eR2);
-
     error1 = eS1 - r1;
     error2 = eS2 - r2;
 
     %Estimate state
-    objectCenter = [0, distance]/100;
+    objectCenter = [0, distance];
     objectAngle = angle;
     %Kalman
     %R_base = diag([0.02, 0.02, 0.05]);
@@ -250,7 +247,8 @@ while true
     vel = (objectCenter - lastPos)/dt;
     lastPos = objectCenter;
 
-    fprintf('errors: %.1f, %.1f\n\n', error1, error2);
+    fprintf('errors: %.1f, %.1f\n', error1, error2);
+    fprintf('velocity: %.1f, %.1f\n\n', vel);
 end
 
 %%
