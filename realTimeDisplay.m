@@ -201,9 +201,9 @@ while true
     distance = flatObjectDistance(r1, r2);
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
-    error1 = r1 - closestPointOnPlane(angle, r1);
-    error2 = r2 - closestPointOnPlane(angle, r2);
-    fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
+    %error1 = r1 - closestPointOnPlane(angle, r1);
+    %error2 = r2 - closestPointOnPlane(angle, r2);
+    %fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
 
     %Estimate state
     %objectCenter = [0, distance]/100;
@@ -229,6 +229,8 @@ while true
             objectCenter(2) + sin(objectAngle)*objectWidth/2];
     set(hObj, 'XData', xObj, 'YData', yObj);
     drawnow
+
+    fprintf('Estimated pos (%.1f, %.1f) \n\n', objectCenter(1), objectCenter(2));
 end
 
 %%
