@@ -149,16 +149,15 @@ h = @(x) [
     x(3)
 ];
 
-%x, y, theta, vel_x, vel_y, omega
+%x, y, theta, vel_x, vel_y, 
 x0 = [0; 2; 0; 0; 0; 0];
 ekf = extendedKalmanFilter(f, h, x0);
 
-ekf.ProcessNoise = diag([
-    0.01, 0.01, 0.05, ...   % position + angle
-    0.5, 0.5, 0.5           % velocities
-]);
+% Process noise (tune this!)
+ekf.ProcessNoise = diag([0.001, 0.001, 0.01]);
 
-ekf.MeasurementNoise = diag([0.05, 0.05, 0.1]);
+% Measurement noise (tune this!)
+ekf.MeasurementNoise = diag([0.05, 0.05, 0.1]); % 5 cm = 0.05 m
 
 %% 
 %Main loop
@@ -203,11 +202,16 @@ while true
     %Estimate state
     %objectCenter = [0, distance]/100;
     %objectAngle = angle;
-    %Kalman
+    % Measurement vector (convert cm → meters)
     z = [r1/100; r2/100; angle];
+
+    % EKF step
     predict(ekf);
     correct(ekf, z);
+
+    % Extract state
     x_est = ekf.State;
+
     objectCenter = x_est(1:2)';
     objectAngle = x_est(3);
 
