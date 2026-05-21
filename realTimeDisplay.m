@@ -145,14 +145,14 @@ sigma_d = 0.5;
 sigma_theta = pi/18;
 sigma_r = 0.5;
 sigma_beta = pi/18;
-P = diag([10, 10, pi^2]);
+P = diag([10, 10]);
 
 %derived
 V = diag([sigma_d^2, sigma_theta^2]);
 W = kron(eye(1), diag([sigma_r^2, sigma_beta^2]));
 
 %Initialize others
-P_pred = zeros(3, 3);
+P_pred = zeros(2, 2);
 H = zeros(2, 3);
 Z = zeros(2, 1);
 z_pred = zeros(2, 1);
@@ -219,9 +219,9 @@ while true
     H = [error1; error2; 0]; %TODO, unsure about this
 
     %F_x, F_v (jacobians)
-    F_x = [1, 0, vel(1);
-        0, 1,  vel(2);
-        0, 0,  1];
+    F_x = [0, vel(1);
+        1,  vel(2);
+        0,  1];
 
     F_v = [vel(1)/norm(vel), 0; 
         vel(2)/norm(vel), 0; 
