@@ -132,7 +132,7 @@ hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 %% 
 %Setting up EKF
 
-dt = 2; %TODO, calculate!
+dt = 0.4; %TODO, calculate!
 
 f = @(x) [
     x(1) + x(4)*dt;
@@ -204,18 +204,18 @@ while true
     %objectCenter = [0, distance]/100;
     %objectAngle = angle;
     %Kalman
+    R_base = diag([0.02, 0.02, 0.05]);
+    R = R_base;
+    predict(ekf);
     z = [r1/100; r2/100; angle];
     z_pred = h(ekf.State);
-
     z_used = z;
-    R = ekf.MeasurementNoise;
-
+   
     % Reject r1 if bad
     if abs(z(1) - z_pred(1)) > 0.3
         z_used(1) = z_pred(1);   % replace with prediction
         R(1,1) = 100;            % ignore it
     end
-
     % Reject r2 if bad
     if abs(z(2) - z_pred(2)) > 0.3
         z_used(2) = z_pred(2);
@@ -225,9 +225,12 @@ while true
     ekf.MeasurementNoise = R;
 
     correct(ekf, z_used);
-    predict(ekf);
-    correct(ekf, z);
+    
     x_est = ekf.State;
+    % Prevent nonsense states
+    if x_est(2) < 0 || x_est(2) > 5
+        ekf.State = [0; 2; 0; 0; 0; 0]; % reset
+    end
     objectCenter = x_est(1:2)';
     objectAngle = x_est(3);
 
