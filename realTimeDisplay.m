@@ -158,7 +158,7 @@ ekf.ProcessNoise = diag([
     0.5, 0.5, 0.5           % velocities
 ]);
 
-ekf.MeasurementNoise = diag([0.05, 0.05, 0.1]);
+ekf.MeasurementNoise = diag([0.02, 0.02, 0.05]);
 
 %% 
 %Main loop
@@ -205,6 +205,26 @@ while true
     %objectAngle = angle;
     %Kalman
     z = [r1/100; r2/100; angle];
+    z_pred = h(ekf.State);
+
+    z_used = z;
+    R = ekf.MeasurementNoise;
+
+    % Reject r1 if bad
+    if abs(z(1) - z_pred(1)) > 0.3
+        z_used(1) = z_pred(1);   % replace with prediction
+        R(1,1) = 100;            % ignore it
+    end
+
+    % Reject r2 if bad
+    if abs(z(2) - z_pred(2)) > 0.3
+        z_used(2) = z_pred(2);
+        R(2,2) = 100;
+    end
+
+    ekf.MeasurementNoise = R;
+
+    correct(ekf, z_used);
     predict(ekf);
     correct(ekf, z);
     x_est = ekf.State;
