@@ -130,6 +130,33 @@ yObj = [objectCenter(2) - sin(objectAngle)*objectWidth/2, ...
 hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 
 %% 
+%Setting up EKF
+
+% State transition (static model)
+f = @(x) [
+    x(1);
+    x(2);
+    x(3)
+];
+
+h = @(x) [
+    sqrt((x(1) - l/200)^2 + x(2)^2);
+    sqrt((x(1) + l/200)^2 + x(2)^2);
+    x(3)
+];
+
+% Initial state guess
+x0 = [0; 2; 0];   % x, y, theta
+
+ekf = extendedKalmanFilter(f, h, x0);
+
+% Process noise (tune this!)
+ekf.ProcessNoise = diag([0.001, 0.001, 0.01]);
+
+% Measurement noise (tune this!)
+ekf.MeasurementNoise = diag([0.05, 0.05, 0.1]); % 5 cm = 0.05 m
+
+%% 
 %Main loop
 
 while true
@@ -170,8 +197,20 @@ while true
     fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
 
     %Estimate state
-    objectCenter = [0, distance]/100;
-    objectAngle = angle;
+    %objectCenter = [0, distance]/100;
+    %objectAngle = angle;
+    % Measurement vector (convert cm → meters)
+    z = [r1/100; r2/100; angle];
+
+    % EKF step
+    predict(ekf);
+    correct(ekf, z);
+
+    % Extract state
+    x_est = ekf.State;
+
+    objectCenter = x_est(1:2)';
+    objectAngle = x_est(3);
 
     %Plot object
     xObj = [objectCenter(1) - cos(objectAngle)*objectWidth/2, ...
