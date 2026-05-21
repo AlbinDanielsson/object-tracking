@@ -7,6 +7,8 @@ objectWidth = 100; %cm
 objectCenter = [0, 0.300];%cm
 objectAngle = 0;%rads
 
+dt = 0.4; %TODO, calculate!
+
 %Velocity calculation
 vel = [0, 0];
 omega = 0;
@@ -138,33 +140,22 @@ hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 %% 
 %Setting up EKF
 
-dt = 0.4; %TODO, calculate!
+%Parameters, TODO update/replace
+sigma_d = 0.5;
+sigma_theta = pi/18;
+sigma_r = 0.5;
+sigma_beta = pi/18;
+P = diag([10, 10, pi^2]);
 
-f = @(x) [
-    x(1) + x(4)*dt;
-    x(2) + x(5)*dt;
-    x(3) + x(6)*dt;
-    x(4);
-    x(5);
-    x(6)
-];
+%derived
+V = diag([sigma_d^2, sigma_theta^2]);
+W = kron(eye(1), diag([sigma_r^2, sigma_beta^2]));
 
-h = @(x) [
-    sqrt((x(1) - l/2)^2 + x(2)^2);
-    sqrt((x(1) + l/2)^2 + x(2)^2);
-    x(3)
-];
-
-%x, y, theta, vel_x, vel_y, omega
-x0 = [0; 2; 0; 0; 0; 0];
-ekf = extendedKalmanFilter(f, h, x0);
-
-ekf.ProcessNoise = diag([
-    0.01, 0.01, 0.05, ...   % position + angle
-    0.5, 0.5, 0.5           % velocities
-]);
-
-ekf.MeasurementNoise = diag([0.02, 0.02, 0.05]);
+%Initialize others
+P_pred = zeros(3, 3);
+H = zeros(2, 3);
+Z = zeros(2, 1);
+z_pred = zeros(2, 1);
 
 %% 
 %Main loop
@@ -207,32 +198,56 @@ while true
     distance = flatObjectDistance(r1, r2);
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
-    %Expected readings, %TODO, verify
+    %% 
+    %EKF loop
+
+    %Expected readings
     ePos = objectCenter + vel * dt;
-    eAngle = objectAngle + omega * dt;
+    eAngle = wrapToPi(objectAngle + omega * dt); %Wrap maybe not needed
     eR1 = abs(ePos(2) + tan(eAngle) * (-l/2 - ePos(1)));
     eR2 = abs(ePos(2) + tan(eAngle) * (l/2 - ePos(1)));
     eS1 = closestPointOnPlane(eAngle, eR1);
     eS2 = closestPointOnPlane(eAngle, eR2);
     error1 = eS1 - r1;
     error2 = eS2 - r2;
+    z_pred = [eS1; eS2];
 
-    %Estimate state
-    objectCenter = [0, distance];
-    objectAngle = angle;
-    %Kalman
-    %R_base = diag([0.02, 0.02, 0.05]);
-    %R = R_base;
-    %predict(ekf);
-    %z = [r1/100; r2/100; angle];
-    %z_used = z;
-    %ekf.MeasurementNoise = R;
-    %correct(ekf, z_used);
-    %x_est = ekf.State;
+    %real reading
+    Z = [r1; r2];
 
-    %objectCenter = x_est(1:2)';
-    %objectAngle = x_est(3);
+    %Calculate H, a function of the error
+    H = [error1; error2; 0]; %TODO, unsure about this
 
+    %F_x, F_v (jacobians)
+    F_x = [1, 0, vel(1);
+        0, 1,  vel(2);
+        0, 0,  1];
+
+    F_v = [vel(1)/norm(vel), 0; 
+        vel(2)/norm(vel), 0; 
+        0, 1];
+
+    %P_pred
+    P_pred = F_x * P * F_x' + F_v * V * F_v';
+
+    %Innovation
+    v = Z - z_pred;
+
+    %Kalman update and gain equations
+    S = H*P_pred*H' + W;
+    K = P_pred * H' / S;
+
+    %correction equations
+    objectCenter = ePos + (K * v)';
+    P = P_pred - K*H*P_pred;
+
+    %Hand written Estimate
+    %objectCenter = [0, distance];
+    %objectAngle = angle;
+    
+    %% 
+    %Plot loop
+    
     %Plot object
     xObj = [objectCenter(1) - cos(objectAngle)*objectWidth/2, ...
             objectCenter(1) + cos(objectAngle)*objectWidth/2];
