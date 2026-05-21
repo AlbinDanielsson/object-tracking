@@ -218,6 +218,7 @@ while true
     ekf.MeasurementNoise = R;
 
     correct(ekf, z_used);
+    x_est = ekf.State;
     objectCenter = x_est(1:2)';
     objectAngle = x_est(3);
 
