@@ -132,7 +132,7 @@ hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 %% 
 %Main loop
 
-while ishandle(hEcho1)
+while true
     data = readwrite(myDaq, pulse);
 
     echo1 = data{:,1};
@@ -170,7 +170,7 @@ while ishandle(hEcho1)
     fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
 
     %Estimate state
-    objectCenter = [0, distance];
+    objectCenter = [0, distance]/100;
     objectAngle = angle;
 
     %Plot object
