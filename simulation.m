@@ -1,9 +1,9 @@
 clc, clear all
-l = 15; %cm
+l = 15.4; %cm
 
 objectWidth = 0.5; %m
-objectCenter = [0, 3];%m
-objectAngle = 0;%rads
+    objectCenter = [0, 3];%m
+    objectAngle = 0;%rads
 
 figure;
 hold on;
@@ -81,8 +81,8 @@ arbitraryTraj = [zeros(1, 1000); 3:-3/999:0];
 
 for i = 1:1000
     %replace this
-    objectCenter = arbitraryTraj(:, i);
-    objectAngle = objectAngle + pi/400;
+    %objectCenter = arbitraryTraj(:, i);
+    %objectAngle = objectAngle + pi/400;
 
     %Plot object
     xObj = [objectCenter(1) - cos(objectAngle)*objectWidth/2, ...
