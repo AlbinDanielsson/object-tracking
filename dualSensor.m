@@ -49,7 +49,6 @@ echo1 = data{:,1};   % ai0
 echo2 = data{:,2};   % ai1
 
 figure;
-
 subplot(3,1,1);
 plot(t*1000, pulse(:,1), t*1000, pulse(:,2), 'LineWidth', 1.5);
 xlabel('Time (ms)');

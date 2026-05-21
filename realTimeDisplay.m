@@ -1,0 +1,215 @@
+clear;
+clc;
+
+%initial values
+l = 15.4; %cm
+objectWidth = 0.5; %m
+objectCenter = [0, 3];%m
+objectAngle = 0;%rads
+
+%%
+% Setting up signals
+myDaq = daq("ni");
+myDaq.Rate = 100000;   % 100 kHz → 10 us per sample
+
+
+addoutput(myDaq, "myDAQ1", "ao0", "Voltage"); % Sensor 1 TRIG
+addinput(myDaq,  "myDAQ1", "ai0", "Voltage"); % Sensor 1 ECHO
+
+addoutput(myDaq, "myDAQ1", "ao1", "Voltage"); % Sensor 2 TRIG
+addinput(myDaq,  "myDAQ1", "ai1", "Voltage"); % Sensor 2 ECHO
+
+cycleLength = 400 * 100;   %400 ms between triggers
+repetitions = 3;
+triggerVoltage = 3;
+
+% One trigger pulse per cycle
+pulse1 = zeros(cycleLength,1);
+pulse2 = zeros(cycleLength,1);
+
+pulse1(end) = triggerVoltage;  % trigger sensor 1
+pulse2(end) = 0;
+
+sensor1Cycle = [pulse1 pulse2];
+
+pulse1 = zeros(cycleLength,1);
+pulse2 = zeros(cycleLength,1);
+
+pulse1(end) = 0;
+pulse2(end) = triggerVoltage;  % trigger sensor 2
+
+sensor2Cycle = [pulse1 pulse2];
+
+% Alternate sensor 1, sensor 2
+pulse = [];
+for k = 1:repetitions
+    pulse = [pulse; sensor1Cycle; sensor2Cycle];
+end
+
+% Extra quiet time at end
+pulse = [pulse; zeros(cycleLength,2)];
+
+[data, time] = readwrite(myDaq, pulse);
+
+t = seconds(data.Time);
+
+echo1 = data{:,1};   % ai0
+echo2 = data{:,2};   % ai1
+
+echoThresh = 2;
+%% 
+% setting up plot
+
+figure;
+hold on;
+axis equal;
+xlim([-1 1]);
+ylim([0 4]);
+
+%Checkerboard
+squareSize = 0.5;
+xEdges = -2:squareSize:2;
+yEdges = 0:squareSize:4;
+for i = 1:length(xEdges)-1
+    for j = 1:length(yEdges)-1
+        if mod(i+j,2) == 0
+            shade = 0.75;
+        else
+            shade = 0.9;
+        end
+        rectangle( ...
+            'Position', [xEdges(i), yEdges(j), squareSize, squareSize], ...
+            'FaceColor', [shade shade shade], ...
+            'EdgeColor', 'none');
+    end
+end
+
+%Sensors
+plot(l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+plot(-l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+xlabel('x');
+ylabel('y');
+box on;
+xSensor = [l/200, -l/200];
+ySensor = [0, 0];
+
+for k = 1:length(xSensor)
+
+    % Left and right cone boundary slopes
+    dx = 4 * tand(7.5);
+
+    xLeft  = xSensor(k) - dx;
+    xRight = xSensor(k) + dx;
+
+    % Shade sensor field of view
+    if k == 1
+        coneColor = [1 0 0];   % red
+    else
+        coneColor = [0 1 0];   % green
+    end
+
+    patch( ...
+        [xSensor(k), xLeft, xRight], ...
+        [0,          4,     4], ...
+        coneColor, ...
+        'FaceAlpha', 0.25, ...
+        'EdgeColor', 'none');
+
+    % Draw cone boundary lines up to y = 4
+    plot([xSensor(k), xLeft],  [0, 4], 'k-', 'LineWidth', 1);
+    plot([xSensor(k), xRight], [0, 4], 'k-', 'LineWidth', 1);
+end
+% Initial object endpoints
+xObj = [objectCenter(1) - cos(objectAngle)*objectWidth/2, ...
+        objectCenter(1) + cos(objectAngle)*objectWidth/2];
+
+yObj = [objectCenter(2) - sin(objectAngle)*objectWidth/2, ...
+        objectCenter(2) + sin(objectAngle)*objectWidth/2];
+
+% Create object once
+hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
+
+%% 
+%Main loop
+
+while ishandle(hEcho1)
+    data = readwrite(myDaq, pulse);
+
+    echo1 = data{:,1};
+    echo2 = data{:,2};
+
+    widths1 = getEchoWidths(echo1, echoThresh);
+    widths2 = getEchoWidths(echo2, echoThresh);
+
+    cm1 = widths1 / 5.8;
+    cm2 = widths2 / 5.8;
+
+    %Remove 1000 cm, usually that is a error
+    cm1 = cm1(cm1 <= 1000);
+    cm2 = cm2(cm2 <= 1000);
+    if isempty(cm1)
+        cm1 = [1000];
+    end
+    if isempty(cm2)
+        cm2 = [1000];
+    end
+
+    r1 = median(cm1);
+    r2 = median(cm2);
+
+    pos = triangle(r1, r2, l);
+    %fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
+    fprintf('r1 = %.1f, r2 = %.1f \n', r1,r2);
+
+    angle = flatObjectAngle(r1, r2, l);
+    distance = flatObjectDistance(r1, r2);
+    fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
+
+    error1 = r1 - closestPointOnPlane(angle, r1);
+    error2 = r2 - closestPointOnPlane(angle, r2);
+    fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
+
+    %Estimate state
+    objectCenter = [0, distance];
+    objectAngle = angle;
+
+    %Plot object
+    xObj = [objectCenter(1) - cos(objectAngle)*objectWidth/2, ...
+            objectCenter(1) + cos(objectAngle)*objectWidth/2];
+    yObj = [objectCenter(2) - sin(objectAngle)*objectWidth/2, ...
+            objectCenter(2) + sin(objectAngle)*objectWidth/2];
+    set(hObj, 'XData', xObj, 'YData', yObj);
+    drawnow
+end
+
+%%
+%functions
+function echoWidths = getEchoWidths(echo, echoThresh)
+
+    repetitions = 3;
+    echoWidths = zeros(repetitions,1);
+
+    bEcho = false;
+    eStart = 0;
+    echoIndex = 1;
+
+    for i = 1:numel(echo)
+
+        if ~bEcho
+            if echo(i) > echoThresh
+                bEcho = true;
+                eStart = i;
+            end
+        else
+            if echo(i) < echoThresh
+                bEcho = false;
+                eEnd = i;
+
+                if echoIndex <= repetitions
+                    echoWidths(echoIndex) = eEnd - eStart;
+                    echoIndex = echoIndex + 1;
+                end
+            end
+        end
+    end
+end
