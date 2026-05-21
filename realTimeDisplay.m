@@ -219,9 +219,9 @@ while true
     H = [error1; error2; 0]; %TODO, unsure about this
 
     %F_x, F_v (jacobians)
-    F_x = [0, vel(1);
-        1,  vel(2);
-        0,  1];
+    F_x = [1, 0, vel(1);
+        0, 1,  vel(2);
+        0, 0,  1];
 
     F_v = [vel(1)/norm(vel), 0; 
         vel(2)/norm(vel), 0; 
