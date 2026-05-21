@@ -1,11 +1,17 @@
 clear;
 clc;
 
-%initial values
+%initial parameters
 l = 15.4; %cm
 objectWidth = 0.5; %m
 objectCenter = [0, 0.3];%m
 objectAngle = 0;%rads
+
+%Velocity calculation
+vel = [0, 0];
+omega = 0;
+lastPos = objectCenter;
+lastAngle = objectAngle;
 
 %%
 % Setting up signals
@@ -191,7 +197,7 @@ while true
     end
     if r2 > 400
         r2 = r1 + l; %
-    end
+    end %TODO, use last estimate for this
 
     %pos = triangle(r1, r2, l);
     %fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
@@ -201,26 +207,34 @@ while true
     distance = flatObjectDistance(r1, r2);
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
-    %error1 = r1 - closestPointOnPlane(angle, r1);
-    %error2 = r2 - closestPointOnPlane(angle, r2);
-    %fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
+    %Expected readings, %TODO, verify
+    ePos = objectPosition + vel * dt;
+    eAngle = objectAngle + omega * dt;
+    eR1 = abs(objectCenter(2) + tan(theta) * (-l/200 - objectCenter(1)));
+    eR2 = abs(objectCenter(2) + tan(theta) * (l/200 - objectCenter(1)));
+    %eR1 = norm(ePos - [-l/200, 0]);
+    %eR2 = norm(ePos - [l/200, 0]);
+    eS1 = closestPointOnPlane(eAngle, eR1);
+    eS2 = closestPointOnPlane(eAngle, eR2);
+
+    error1 = eS1 - r1;
+    error2 = eS2 - r2;
 
     %Estimate state
-    %objectCenter = [0, distance]/100;
-    %objectAngle = angle;
+    objectCenter = [0, distance]/100;
+    objectAngle = angle;
     %Kalman
-    R_base = diag([0.02, 0.02, 0.05]);
-    R = R_base;
-    predict(ekf);
-    z = [r1/100; r2/100; angle];
-    z_used = z;
+    %R_base = diag([0.02, 0.02, 0.05]);
+    %R = R_base;
+    %predict(ekf);
+    %z = [r1/100; r2/100; angle];
+    %z_used = z;
+    %ekf.MeasurementNoise = R;
+    %correct(ekf, z_used);
+    %x_est = ekf.State;
 
-    ekf.MeasurementNoise = R;
-
-    correct(ekf, z_used);
-    x_est = ekf.State;
-    objectCenter = x_est(1:2)';
-    objectAngle = x_est(3);
+    %objectCenter = x_est(1:2)';
+    %objectAngle = x_est(3);
 
     %Plot object
     xObj = [objectCenter(1) - cos(objectAngle)*objectWidth/2, ...
@@ -230,7 +244,13 @@ while true
     set(hObj, 'XData', xObj, 'YData', yObj);
     drawnow
 
-    fprintf('Estimated pos (%.1f, %.1f) \n\n', objectCenter(1), objectCenter(2));
+    %Update velocities
+    omega = (objectAngle - lastAngle)/dt;
+    lastAngle = objectAngle;
+    vel = (objectCenter - lastPos)/dt;
+    lastPos = objectCenter;
+
+    fprintf('errors: %.1f, %.1f\n\n', error1, error2);
 end
 
 %%

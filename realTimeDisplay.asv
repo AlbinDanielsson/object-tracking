@@ -4,7 +4,7 @@ clc;
 %initial values
 l = 15.4; %cm
 objectWidth = 0.5; %m
-objectCenter = [0, 3];%m
+objectCenter = [0, 0.3];%m
 objectAngle = 0;%rads
 
 %%
@@ -19,7 +19,7 @@ addinput(myDaq,  "myDAQ1", "ai0", "Voltage"); % Sensor 1 ECHO
 addoutput(myDaq, "myDAQ1", "ao1", "Voltage"); % Sensor 2 TRIG
 addinput(myDaq,  "myDAQ1", "ai1", "Voltage"); % Sensor 2 ECHO
 
-cycleLength = 400 * 100;   %400 ms between triggers
+cycleLength = 40 * 100;   %40 ms between triggers
 repetitions = 3;
 triggerVoltage = 3;
 
@@ -84,7 +84,7 @@ for i = 1:length(xEdges)-1
     end
 end
 
-%Sensors
+%plot sensors
 plot(l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
 plot(-l/200, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
 xlabel('x');
@@ -132,7 +132,7 @@ hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 %% 
 %Setting up EKF
 
-dt = 2; %TODO, calculate!
+dt = 0.4; %TODO, calculate!
 
 f = @(x) [
     x(1) + x(4)*dt;
@@ -149,15 +149,16 @@ h = @(x) [
     x(3)
 ];
 
-%x, y, theta, vel_x, vel_y, 
+%x, y, theta, vel_x, vel_y, omega
 x0 = [0; 2; 0; 0; 0; 0];
 ekf = extendedKalmanFilter(f, h, x0);
 
-% Process noise (tune this!)
-ekf.ProcessNoise = diag([0.001, 0.001, 0.01]);
+ekf.ProcessNoise = diag([
+    0.01, 0.01, 0.05, ...   % position + angle
+    0.5, 0.5, 0.5           % velocities
+]);
 
-% Measurement noise (tune this!)
-ekf.MeasurementNoise = diag([0.05, 0.05, 0.1]); % 5 cm = 0.05 m
+ekf.MeasurementNoise = diag([0.02, 0.02, 0.05]);
 
 %% 
 %Main loop
@@ -183,11 +184,16 @@ while true
     if isempty(cm2)
         cm2 = [1000];
     end
-
     r1 = median(cm1);
     r2 = median(cm2);
+    if r1 > 400 %Max distance
+        r1 = r2 + l; %Can't be further away than that
+    end
+    if r2 > 400
+        r2 = r1 + l; %
+    end %TODO, use last estimate for this
 
-    pos = triangle(r1, r2, l);
+    %pos = triangle(r1, r2, l);
     %fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
     fprintf('r1 = %.1f, r2 = %.1f \n', r1,r2);
 
@@ -195,21 +201,21 @@ while true
     distance = flatObjectDistance(r1, r2);
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
-    error1 = r1 - closestPointOnPlane(angle, r1);
-    error2 = r2 - closestPointOnPlane(angle, r2);
-    fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
+    %error1 = r1 - closestPointOnPlane(angle, r1);
+    %error2 = r2 - closestPointOnPlane(angle, r2);
+    %fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
 
     %Estimate state
     %objectCenter = [0, distance]/100;
     %objectAngle = angle;
-    % Measurement vector (convert cm → meters)
-    z = [r1/100; r2/100; angle];
-
-    % EKF step
-    predict(ekf);
-    correct(ekf, z);
-
-    % Extract state
+    %Kalman
+    %R_base = diag([0.02, 0.02, 0.05]);
+    %R = R_base;
+    %predict(ekf);
+    %z = [r1/100; r2/100; angle];
+    z_used = z;
+    ekf.MeasurementNoise = R;
+    correct(ekf, z_used);
     x_est = ekf.State;
 
     objectCenter = x_est(1:2)';
@@ -222,6 +228,8 @@ while true
             objectCenter(2) + sin(objectAngle)*objectWidth/2];
     set(hObj, 'XData', xObj, 'YData', yObj);
     drawnow
+
+    fprintf('Estimated pos (%.1f, %.1f) \n\n', objectCenter(1), objectCenter(2));
 end
 
 %%
