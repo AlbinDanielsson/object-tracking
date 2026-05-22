@@ -1,7 +1,159 @@
 clear all
 clc
 
-A = [
-    5
-    4
-    ]
+l = 15.4;
+width = 20;
+maxRange = 400;
+X = [0, 17, 0];
+
+objectWidth = width; %cm
+objectCenter = [X(1), X(2)];%cm
+objectAngle = X(3);%rads
+
+figure;
+hold on;
+axis equal;
+xlim([-100 100]);
+ylim([0 400]);
+
+%Checkerboard
+squareSize = 50;
+xEdges = -200:squareSize:200;
+yEdges = 0:squareSize:400;
+for i = 1:length(xEdges)-1
+    for j = 1:length(yEdges)-1
+        if mod(i+j,2) == 0
+            shade = 0.75;
+        else
+            shade = 0.9;
+        end
+        rectangle( ...
+            'Position', [xEdges(i), yEdges(j), squareSize, squareSize], ...
+            'FaceColor', [shade shade shade], ...
+            'EdgeColor', 'none');
+    end
+end
+
+%Sensors
+plot(l/2, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+plot(-l/2, 0, 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+xlabel('x');
+ylabel('y');
+box on;
+xSensor = [l/2, -l/2];
+ySensor = [0, 0];
+for k = 1:length(xSensor)
+
+    % Left and right cone boundary slopes
+    dx = 400 * tand(7.5);
+
+    xLeft  = xSensor(k) - dx;
+    xRight = xSensor(k) + dx;
+
+    % Shade sensor field of view
+    if k == 1
+        coneColor = [1 0 0];   % red
+    else
+        coneColor = [0 1 0];   % green
+    end
+
+    patch( ...
+        [xSensor(k), xLeft, xRight], ...
+        [0,          400,     400], ...
+        coneColor, ...
+        'FaceAlpha', 0.25, ...
+        'EdgeColor', 'none');
+
+    % Draw cone boundary lines up to y = 4
+    plot([xSensor(k), xLeft],  [0, 400], 'k-', 'LineWidth', 1);
+    plot([xSensor(k), xRight], [0, 400], 'k-', 'LineWidth', 1);
+end
+
+%% 
+
+% Initial object endpoints
+xObj = [objectCenter(1) - cos(objectAngle)*objectWidth/2, ...
+        objectCenter(1) + cos(objectAngle)*objectWidth/2];
+
+yObj = [objectCenter(2) - sin(objectAngle)*objectWidth/2, ...
+        objectCenter(2) + sin(objectAngle)*objectWidth/2];
+
+% Create object once
+hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
+drawnow
+
+b = expectedSensorReading(X, -l/2, width, maxRange);
+%a = expectedSensorReading(X, l/2, width, maxRange);
+fprintf('sensor %.5f\n', b);
+
+%Copied to realTimeDisplay 05-22
+function r = expectedSensorReading(X, sensorX, objectWidth, maxRange)
+
+    %Angle to closest point if width was inf
+    angleToClosest = X(3) + pi/2;
+    s = [sensorX; 0];
+
+    %Get endpoints
+    delta = [(objectWidth/2) * cos(X(3)); (objectWidth/2) * sin(X(3))];
+    epL = X(1:2)' - delta; %left
+    epR = X(1:2)' + delta; %right
+
+    %Get the angles to the endpoints
+    aEpL = atan2(epL(1) - s(1), epL(2) - s(2)) + pi/2;
+    aEpR = atan2(epR(1) - s(1), epR(2) - s(2)) + pi/2;
+
+    %See where scope boundaries cross the object, with inf len
+    leftScopeBoundaryAngle = pi/2 + pi/24; %90 + 7.5 degrees
+    rightScopeBoundaryAngle = pi/2 - pi/24;
+    dO = [cos(X(3)); sin(X(3))];
+    dL = [cos(leftScopeBoundaryAngle); sin(leftScopeBoundaryAngle)];
+    dR = [cos(rightScopeBoundaryAngle); sin(rightScopeBoundaryAngle)];
+    tr = det([s-X(1:2)', dR]) / det([dO, dR]);
+    tl = det([s-X(1:2)', dL]) / det([dO, dL]);
+    leftBP = X(1:2)' + tl*dO;
+    rightBP = X(1:2)' + tr*dO;
+    %aLBp = atan2(leftBP(1) - s(1), leftBP(2) - s(2)); %Angle to that boundary point
+    %aRBp = atan2(rightBP(1) - s(1), rightBP(2) - s(2));
+
+    %if whole object is out of bounds, return maxRange
+    %if aEpL < aRBp || aEpR > aLBp
+    if (aEpL > pi/2 + pi/24 && aEpR > pi/2 + pi/24) || (aEpL < pi/2 - pi/24 && aEpR < pi/2 - pi/24)
+        r = maxRange;
+        return;
+    end
+
+    %if end point is out of bounds and BP's are close enough to center
+    %move ep to BP
+    if aEpL > pi/2 + pi/24
+        aEpL = pi/2 + pi/24;
+        epL = leftBP;
+    elseif aEpL < pi/2 - pi/24
+        aEpL = pi/2 - pi/24;
+        epL = rightBP;
+    end
+    if aEpR > pi/2 + pi/24
+        aEpR = pi/2 + pi/24;
+        epR = leftBP;
+    elseif aEpR < pi/2 - pi/24
+        aEpR = pi/2 - pi/24;
+        epR = rightBP;
+    end
+
+    %See if the line from the sensor intercepts the object
+    closestPoint = [0; 0];
+
+    if angleToClosest < aEpR && angleToClosest > aEpL
+        %Set closest point to the intersection from angle to closest
+        dS = [cos(angleToClosest); sin(angleToClosest)];
+        t = det([s-X(1:2)', dS]) / det([dO, dS]);
+        closestPoint = X(1:2)' + t*dO;
+
+    elseif angleToClosest > aEpL
+        closestPoint = epL;
+
+    elseif angleToClosest < aEpR
+        closestPoint = epR;
+    end
+
+    r = norm(closestPoint - s);
+end

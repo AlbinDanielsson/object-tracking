@@ -1,8 +1,8 @@
 clc, clear all
 l = 15.4; %cm
 
-objectWidth = 100; %m
-    objectCenter = [0, 300];%m
+objectWidth = 100; %cm
+    objectCenter = [0, 300];%cm
     objectAngle = 0;%rads
 
 figure;
@@ -75,6 +75,7 @@ yObj = [objectCenter(2) - sin(objectAngle)*objectWidth/2, ...
 
 % Create object once
 hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
+drawnow
 
 %Remove
 arbitraryTraj = [zeros(1, 1000); 3:-3/999:0];

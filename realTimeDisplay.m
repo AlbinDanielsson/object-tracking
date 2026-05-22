@@ -3,8 +3,8 @@ clc;
 
 %initial parameters
 l = 15.4; %cm
-objectWidth = 100; %cm
-objectCenter = [0, 0.300];%cm
+objectWidth = 20; %cm
+objectCenter = [0, 15];%cm
 objectAngle = 0;%rads
 
 dt = 0.4; %TODO, calculate!
@@ -143,14 +143,16 @@ X = [objectCenter(1); objectCenter(2); objectAngle];
 x_pred = [0, 0, 0];
 
 %Parameters, TODO update/replace
-sigma_d = 0.5;
-sigma_theta = pi/18;
-sigma_r = 0.5;
-P = diag([10, 10, pi^2]);
+sigma_x = 3;              % cm per timestep
+sigma_y = 3;              % cm per timestep
+sigma_theta = deg2rad(5);   % rad per timestep
+
+sigma_r = 100;              % cm sensor noise
+P = diag([5^2, 5^2, deg2rad(20)^2]);
 
 %derived
+Q = diag([sigma_x^2, sigma_y^2, sigma_theta^2]);
 W = diag([sigma_r^2, sigma_r^2]);
-Q = diag([sigma_d^2, sigma_d^2, sigma_theta^2]);
 
 %Initialize others
 P_pred = zeros(3, 3);
@@ -173,23 +175,25 @@ while true
     cm1 = widths1 / 5.8;
     cm2 = widths2 / 5.8;
 
-    %Remove 1000 cm, usually that is a error
-    cm1 = cm1(cm1 <= 1000);
-    cm2 = cm2(cm2 <= 1000);
+    %Remove 400 cm, usually that is a error
+    cm1 = cm1(cm1 <= 450);
+    cm2 = cm2(cm2 <= 450);
     if isempty(cm1)
         cm1 = [400];
     end
     if isempty(cm2)
         cm2 = [400];
     end
+
     r1 = median(cm1);
     r2 = median(cm2);
-    if r1 > 400 %Max distance
-        r1 = r2 + l; %Can't be further away than that
-    end
-    if r2 > 400
-        r2 = r1 + l; %
-    end %TODO, use last estimate for this
+
+    %if r1 > 400 %Max distance
+    %    r1 = r2 + l; %Can't be further away than that
+    %end
+    %if r2 > 400
+    %    r2 = r1 + l; %
+    %end %TODO, use last estimate for this
 
     %pos = triangle(r1, r2, l);
     %fprintf('(%.1f, %.1f), r1 = %.1f, r2 = %.1f \n', pos(1), pos(2), median(cm1), median(cm2));
@@ -221,11 +225,15 @@ while true
         expectedSensorReading(X, -l/2, objectWidth, 400);
         expectedSensorReading(X,  l/2, objectWidth, 400)
     ];
-    eps = 1e-4;
+
+    epsVec = [0.5; 0.5; deg2rad(1)];
+
     for j = 1:3
         dX = zeros(3,1);
-        dX(j) = eps;
-        H(:,j) = (h(X_pred + dX) - h(X_pred - dX)) / (2*eps);
+        dX(j) = epsVec(j);
+
+        H(:,j) = (h(X_pred + dX) - h(X_pred - dX)) ...
+             / (2*epsVec(j));
     end
 
     %F_x, F_v (jacobians)
@@ -267,13 +275,15 @@ while true
     drawnow
 
     %Update velocities
-    omega = (objectAngle - lastAngle)/dt;
+    %omega = (objectAngle - lastAngle)/dt;
     lastAngle = objectAngle;
-    vel = (objectCenter - lastPos)/dt;
+    %vel = (objectCenter - lastPos)/dt;
     lastPos = objectCenter;
 
     %fprintf('errors: %.1f, %.1f\n', error1, error2);
-    fprintf('velocity: %.1f, %.1f\n\n', vel);
+    fprintf('velocity: %.1f, %.1f\n', vel);
+
+    fprintf('position: %.1f, %.1f\n\n', objectCenter);
 end
 
 %%
@@ -311,61 +321,75 @@ end
 %TODO, consider moving these to a separate file and verify them working
 function r = expectedSensorReading(X, sensorX, objectWidth, maxRange)
 
-    halfFov = deg2rad(7.5);
+    %only in realTimeDisplay
+    X = X';
 
-    cx = X(1);
-    cy = X(2);
-    theta = X(3);
-
-    % Object endpoints
-    p1 = [cx; cy] - 0.5*objectWidth*[cos(theta); sin(theta)];
-    p2 = [cx; cy] + 0.5*objectWidth*[cos(theta); sin(theta)];
-
-    % Sensor position
+    %Angle to closest point if width was inf
+    angleToClosest = X(3) + pi/2;
     s = [sensorX; 0];
 
-    % Search over rays inside sensor cone
-    angles = linspace(-halfFov, halfFov, 101);
+    %Get endpoints
+    delta = [(objectWidth/2) * cos(X(3)); (objectWidth/2) * sin(X(3))];
+    epL = X(1:2)' - delta; %left
+    epR = X(1:2)' + delta; %right
 
-    bestR = maxRange;
+    %Get the angles to the endpoints
+    aEpL = atan2(epL(1) - s(1), epL(2) - s(2)) + pi/2;
+    aEpR = atan2(epR(1) - s(1), epR(2) - s(2)) + pi/2;
 
-    for a = angles
-        % Ray direction, cone points upward along +y
-        d = [sin(a); cos(a)];
+    %See where scope boundaries cross the object, with inf len
+    leftScopeBoundaryAngle = pi/2 + pi/24; %90 + 7.5 degrees
+    rightScopeBoundaryAngle = pi/2 - pi/24;
+    dO = [cos(X(3)); sin(X(3))];
+    dL = [cos(leftScopeBoundaryAngle); sin(leftScopeBoundaryAngle)];
+    dR = [cos(rightScopeBoundaryAngle); sin(rightScopeBoundaryAngle)];
+    tr = det([s-X(1:2)', dR]) / det([dO, dR]);
+    tl = det([s-X(1:2)', dL]) / det([dO, dL]);
+    leftBP = X(1:2)' + tl*dO;
+    rightBP = X(1:2)' + tr*dO;
+    %aLBp = atan2(leftBP(1) - s(1), leftBP(2) - s(2)); %Angle to that boundary point
+    %aRBp = atan2(rightBP(1) - s(1), rightBP(2) - s(2));
 
-        [hit, range] = raySegmentIntersection(s, d, p1, p2);
-
-        if hit && range < bestR
-            bestR = range;
-        end
-    end
-
-    r = bestR;
-end
-
-function [hit, range] = raySegmentIntersection(s, d, p1, p2)
-
-    v = p2 - p1;
-
-    A = [d, -v];
-    b = p1 - s;
-
-    if abs(det(A)) < 1e-9
-        hit = false;
-        range = inf;
+    %if whole object is out of bounds, return maxRange
+    %if aEpL < aRBp || aEpR > aLBp
+    if (aEpL > pi/2 + pi/24 && aEpR > pi/2 + pi/24) || (aEpL < pi/2 - pi/24 && aEpR < pi/2 - pi/24)
+        r = maxRange;
         return;
     end
 
-    sol = A \ b;
-
-    t = sol(1);   % distance along ray
-    u = sol(2);   % position along segment, 0 to 1
-
-    hit = (t >= 0) && (u >= 0) && (u <= 1);
-
-    if hit
-        range = t;
-    else
-        range = inf;
+    %if end point is out of bounds and BP's are close enough to center
+    %move ep to BP
+    if aEpL > pi/2 + pi/24
+        aEpL = pi/2 + pi/24;
+        epL = leftBP;
+    elseif aEpL < pi/2 - pi/24
+        aEpL = pi/2 - pi/24;
+        epL = rightBP;
     end
+    if aEpR > pi/2 + pi/24
+        aEpR = pi/2 + pi/24;
+        epR = leftBP;
+    elseif aEpR < pi/2 - pi/24
+        aEpR = pi/2 - pi/24;
+        epR = rightBP;
+    end
+
+    %See if the line from the sensor intercepts the object
+    closestPoint = [0; 0];
+
+    if angleToClosest < aEpR && angleToClosest > aEpL
+        %Set closest point to the intersection from angle to closest
+        dS = [cos(angleToClosest); sin(angleToClosest)];
+        t = det([s-X(1:2)', dS]) / det([dO, dS]);
+        closestPoint = X(1:2)' + t*dO;
+
+    elseif angleToClosest > aEpL
+        closestPoint = epL;
+
+    elseif angleToClosest < aEpR
+        closestPoint = epR;
+    end
+
+    r = norm(closestPoint - s);
 end
+
