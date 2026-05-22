@@ -139,20 +139,21 @@ hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 
 %% 
 %Setting up EKF
+X = [objectCenter(1); objectCenter(2); objectAngle];
+x_pred = [0, 0, 0];
 
 %Parameters, TODO update/replace
 sigma_d = 0.5;
 sigma_theta = pi/18;
 sigma_r = 0.5;
-sigma_beta = pi/18;
-P = diag([10, 10]);
+P = diag([10, 10, pi^2]);
 
 %derived
-V = diag([sigma_d^2, sigma_theta^2]);
-W = kron(eye(1), diag([sigma_r^2, sigma_beta^2]));
+W = diag([sigma_r^2, sigma_r^2]);
+Q = diag([sigma_d^2, sigma_d^2, sigma_theta^2]);
 
 %Initialize others
-P_pred = zeros(2, 2);
+P_pred = zeros(3, 3);
 H = zeros(2, 3);
 Z = zeros(2, 1);
 z_pred = zeros(2, 1);
@@ -202,35 +203,40 @@ while true
     %EKF loop
 
     %Expected readings
-    ePos = objectCenter + vel * dt;
-    eAngle = wrapToPi(objectAngle + omega * dt); %Wrap maybe not needed
-    eR1 = abs(ePos(2) + tan(eAngle) * (-l/2 - ePos(1)));
-    eR2 = abs(ePos(2) + tan(eAngle) * (l/2 - ePos(1)));
-    eS1 = closestPointOnPlane(eAngle, eR1);
-    eS2 = closestPointOnPlane(eAngle, eR2);
-    error1 = eS1 - r1;
-    error2 = eS2 - r2;
-    z_pred = [eS1; eS2];
+    %ePos = objectCenter + vel * dt;
+    %eAngle = wrapToPi(objectAngle + omega * dt); %Wrap maybe not needed
+    %eR1 = abs(ePos(2) + tan(eAngle) * (-l/2 - ePos(1)));
+    %eR2 = abs(ePos(2) + tan(eAngle) * (l/2 - ePos(1)));
+    %eS1 = closestPointOnPlane(eAngle, eR1);
+    %eS2 = closestPointOnPlane(eAngle, eR2);
+    %error1 = eS1 - r1;
+    %error2 = eS2 - r2;
+    %z_pred = [eS1; eS2];
+    X_pred = [X(1) + vel(1)*dt;
+          X(2) + vel(2)*dt;
+          wrapToPi(X(3) + omega*dt)];
 
-    %real reading
-    Z = [r1; r2];
-
-    %Calculate H, a function of the error
-    H = [error1; error2; 0]; %TODO, unsure about this
+    %Calculate H
+    h = @(X) [
+        expectedSensorReading(X, -l/2, objectWidth, 400);
+        expectedSensorReading(X,  l/2, objectWidth, 400)
+    ];
+    eps = 1e-4;
+    for j = 1:3
+        dX = zeros(3,1);
+        dX(j) = eps;
+        H(:,j) = (h(X_pred + dX) - h(X_pred - dX)) / (2*eps);
+    end
 
     %F_x, F_v (jacobians)
-    F_x = [1, 0, vel(1);
-        0, 1,  vel(2);
-        0, 0,  1];
-
-    F_v = [vel(1)/norm(vel), 0; 
-        vel(2)/norm(vel), 0; 
-        0, 1];
+    F_x = eye(3);
 
     %P_pred
-    P_pred = F_x * P * F_x' + F_v * V * F_v';
+    P_pred = F_x * P * F_x' + Q;
 
     %Innovation
+    z_pred = h(X_pred);
+    Z = [r1; r2]; %real reading
     v = Z - z_pred;
 
     %Kalman update and gain equations
@@ -238,12 +244,16 @@ while true
     K = P_pred * H' / S;
 
     %correction equations
-    objectCenter = ePos + (K * v)';
-    P = P_pred - K*H*P_pred;
+    X = X_pred + K * v;
+    X(3) = wrapToPi(X(3));
+    P = (eye(3) - K*H) * P_pred;
+
+    objectCenter = X(1:2)';
+    objectAngle = X(3);
 
     %Hand written Estimate
     %objectCenter = [0, distance];
-    %objectAngle = angle;
+    %objectAngle = angle
     
     %% 
     %Plot loop
@@ -262,7 +272,7 @@ while true
     vel = (objectCenter - lastPos)/dt;
     lastPos = objectCenter;
 
-    fprintf('errors: %.1f, %.1f\n', error1, error2);
+    %fprintf('errors: %.1f, %.1f\n', error1, error2);
     fprintf('velocity: %.1f, %.1f\n\n', vel);
 end
 
@@ -295,5 +305,67 @@ function echoWidths = getEchoWidths(echo, echoThresh)
                 end
             end
         end
+    end
+end
+
+%TODO, consider moving these to a separate file and verify them working
+function r = expectedSensorReading(X, sensorX, objectWidth, maxRange)
+
+    halfFov = deg2rad(7.5);
+
+    cx = X(1);
+    cy = X(2);
+    theta = X(3);
+
+    % Object endpoints
+    p1 = [cx; cy] - 0.5*objectWidth*[cos(theta); sin(theta)];
+    p2 = [cx; cy] + 0.5*objectWidth*[cos(theta); sin(theta)];
+
+    % Sensor position
+    s = [sensorX; 0];
+
+    % Search over rays inside sensor cone
+    angles = linspace(-halfFov, halfFov, 101);
+
+    bestR = maxRange;
+
+    for a = angles
+        % Ray direction, cone points upward along +y
+        d = [sin(a); cos(a)];
+
+        [hit, range] = raySegmentIntersection(s, d, p1, p2);
+
+        if hit && range < bestR
+            bestR = range;
+        end
+    end
+
+    r = bestR;
+end
+
+function [hit, range] = raySegmentIntersection(s, d, p1, p2)
+
+    v = p2 - p1;
+
+    A = [d, -v];
+    b = p1 - s;
+
+    if abs(det(A)) < 1e-9
+        hit = false;
+        range = inf;
+        return;
+    end
+
+    sol = A \ b;
+
+    t = sol(1);   % distance along ray
+    u = sol(2);   % position along segment, 0 to 1
+
+    hit = (t >= 0) && (u >= 0) && (u <= 1);
+
+    if hit
+        range = t;
+    else
+        range = inf;
     end
 end
