@@ -3,9 +3,11 @@ clc;
 
 %initial parameters
 l = 15.4; %cm
-objectWidth = 22; %cm
-objectCenter = [0, 15];%cm
+objectWidth = 100; %cm
+objectCenter = [0, 400];%cm
 objectAngle = 0;%rads
+
+pause(10);
 
 sensorEA = pi/20;
 sensorDeg = 8.5;
@@ -196,51 +198,37 @@ while true
     distance = flatObjectDistance(r1, r2);
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
+    validSensors = true;
+    if abs(r1 - r2) > l %(impossible)
+        validSensors = false;
+    end
+    if angle > pi/10 %should not be possible
+        validSensors = false;
+    end
+    
+    if validSensors == false
+        fprintf("\nSKIP!\n\n");
+        continue
+    end
+
     %% 
     %EKF loop
-
-    %Expected readings
-    %ePos = objectCenter + vel * dt;
-    %eAngle = wrapToPi(objectAngle + omega * dt); %Wrap maybe not needed
-    %eR1 = abs(ePos(2) + tan(eAngle) * (-l/2 - ePos(1)));
-    %eR2 = abs(ePos(2) + tan(eAngle) * (l/2 - ePos(1)));
-    %eS1 = closestPointOnPlane(eAngle, eR1);
-    %eS2 = closestPointOnPlane(eAngle, eR2);
-    %error1 = eS
-
-    %error2 = eS2 - r2;
-    %z_pred = [eS1; eS2];
     X_pred = [X(1) + vel(1)*dt;
           X(2) + vel(2)*dt;
           wrapToPi(X(3) + omega*dt)];
 
     %Calculate H
-    h = @(X) [
-        expectedSensorReading(X, -l/2, objectWidth, 400, sensorEA);
-        expectedSensorReading(X,  l/2, objectWidth, 400, sensorEA)
-    ];
-    epsVec = [0.5; 0.5; deg2rad(1)];
-    for j = 1:3
-        dX = zeros(3,1);
-        dX(j) = epsVec(j);
+    H = calculateH(X(3), l);
 
-        H(:,j) = (h(X_pred + dX) - h(X_pred - dX)) ...
-             / (2*epsVec(j));
-    end
-
-    %H = [
-    %   ∂r1/∂x   ∂r1/∂y   ∂r1/∂theta
-    %   ∂r2/∂x   ∂r2/∂y   ∂r2/∂theta
-    %]
-
-    %F_x, F_v (jacobians)
+    %F_x, jacobian
     F_x = eye(3);
 
     %P_pred
     P_pred = F_x * P * F_x' + Q;
 
     %Innovation
-    z_pred = h(X_pred);
+    z_pred(1) = expectedSensorReading(X, -l/2, objectWidth, 400, sensorEA);
+    z_pred(2) = expectedSensorReading(X, l/2, objectWidth, 400, sensorEA);
     Z = [r1; r2]; %real reading
     v = Z - z_pred;
 
@@ -253,12 +241,12 @@ while true
     X(3) = wrapToPi(X(3));
     P = (eye(3) - K*H) * P_pred;
 
-    objectCenter = X(1:2)';
-    objectAngle = X(3);
+    %objectCenter = X(1:2)';
+    %objectAngle = X(3);
 
     %Hand written Estimate
-    %objectCenter = [0, distance];
-    %objectAngle = angle
+    objectCenter = [0, distance];
+    objectAngle = angle;
     
     %% 
     %Plot loop
@@ -272,9 +260,9 @@ while true
     drawnow
 
     %Update velocities
-    %omega = (objectAngle - lastAngle)/dt;
+    omega = (objectAngle - lastAngle)/dt;
     lastAngle = objectAngle;
-    %vel = (objectCenter - lastPos)/dt;
+    vel = (objectCenter - lastPos)/dt;
     lastPos = objectCenter;
 
     %fprintf('errors: %.1f, %.1f\n', error1, error2);
