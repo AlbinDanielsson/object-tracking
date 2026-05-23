@@ -3,8 +3,8 @@ clc;
 
 %initial parameters
 l = 15.4; %cm
-objectWidth = 20; %cm
-objectCenter = [0, 30];%cm
+objectWidth = 100; %cm
+objectCenter = [0, 100];%cm
 objectAngle = 0;%rads
 
 sensorEA = pi/20;
@@ -136,7 +136,22 @@ hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 
 %% 
 %Setting up filter
+% State: [x; y; theta; vx; vy; omega]
+Xhat = [0; 400; 0; 0; 0; 0];
 
+P = diag([5^2, 80^2, deg2rad(30)^2, 5^2, 30^2, deg2rad(20)^2]);
+Q = diag([0.1, 2, deg2rad(1)^2, 0.1, 10, deg2rad(5)^2]);
+
+% Measurement: [x; y; theta]
+R = diag([2^2, 8^2, deg2rad(5)^2]);
+
+filterInitialized = false;
+
+xLog = [];
+yLog = [];
+thetaLog = [];
+tLog = [];
+filterTic = tic;
 %% 
 %Main loop
 
@@ -172,10 +187,70 @@ while true
 
     %% 
     %filter
+    % Reject invalid max-range readings
+validMeasurement = r1 < 350 && r2 < 350 && distance > 2 && distance < 350;
 
-    %hand written Estimate, (replace)
-    objectCenter = [0, distance];
-    objectAngle = angle;
+if validMeasurement
+
+    z = [0; distance; angle];
+
+    if ~filterInitialized
+        Xhat = [0; distance; angle; 0; 0; 0];
+        filterInitialized = true;
+    end
+
+    F = [1 0 0 dt 0  0;
+         0 1 0 0  dt 0;
+         0 0 1 0  0  dt;
+         0 0 0 1  0  0;
+         0 0 0 0  1  0;
+         0 0 0 0  0  1];
+
+    Xhat = F * Xhat;
+    Xhat(3) = wrapToPiLocal(Xhat(3));
+    P = F * P * F' + Q;
+
+    H = [1 0 0 0 0 0;
+         0 1 0 0 0 0;
+         0 0 1 0 0 0];
+
+    innovation = z - H * Xhat;
+    innovation(3) = wrapToPiLocal(innovation(3));
+
+    S = H * P * H' + R;
+    K = P * H' / S;
+
+    gate = innovation' / S * innovation;
+
+    if gate < 25
+        Xhat = Xhat + K * innovation;
+        P = (eye(6) - K * H) * P;
+    end
+
+    Xhat(3) = wrapToPiLocal(Xhat(3));
+
+else
+    % Prediction only if reading is bad
+    F = [1 0 0 dt 0  0;
+         0 1 0 0  dt 0;
+         0 0 1 0  0  dt;
+         0 0 0 1  0  0;
+         0 0 0 0  1  0;
+         0 0 0 0  0  1];
+
+    Xhat = F * Xhat;
+    Xhat(3) = wrapToPiLocal(Xhat(3));
+    P = F * P * F' + Q;
+end
+
+objectCenter = Xhat(1:2)';
+objectAngle = Xhat(3);
+
+xLog(end+1) = Xhat(1);
+yLog(end+1) = Xhat(2);
+thetaLog(end+1) = Xhat(3);
+tLog(end+1) = toc(filterTic);
+    
     
     %% 
     %Plot loop
@@ -188,7 +263,8 @@ while true
     set(hObj, 'XData', xObj, 'YData', yObj);
     drawnow
 
-    fprintf('position: %.1f, %.1f\n\n', objectCenter);
+    fprintf('position: %.1f, %.1f\n', objectCenter);
+    fprintf('EKF\n\n')
 end
 
 %%
@@ -221,4 +297,35 @@ function echoWidths = getEchoWidths(echo, echoThresh)
             end
         end
     end
+end
+
+%%helpers
+function H = numericalJacobian(hFun, X)
+    z0 = hFun(X);
+    n = numel(X);
+    m = numel(z0);
+    H = zeros(m, n);
+
+    epsVal = 1e-3;
+
+    for i = 1:n
+        dX = zeros(n,1);
+
+        if i == 3 || i == 6
+            step = 1e-4;
+        else
+            step = epsVal;
+        end
+
+        dX(i) = step;
+
+        zp = hFun(X + dX);
+        zm = hFun(X - dX);
+
+        H(:,i) = (zp - zm) / (2 * step);
+    end
+end
+
+function a = wrapToPiLocal(a)
+    a = mod(a + pi, 2*pi) - pi;
 end

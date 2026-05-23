@@ -136,7 +136,35 @@ hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 
 %% 
 %Setting up filter
+% Alpha-beta-gamma filter state
+xEst = 0;
 
+yEst = objectCenter(2);
+yVel = 0;
+yAcc = 0;
+
+thetaEst = objectAngle;
+thetaVel = 0;
+thetaAcc = 0;
+
+filterInitialized = false;
+
+% Tuning: increase alpha for faster response, decrease for smoother output
+alphaY = 0.55;
+betaY  = 0.20;
+gammaY = 0.04;
+
+alphaT = 0.50;
+betaT  = 0.18;
+gammaT = 0.03;
+
+maxRange = 350;
+
+xLog = [];
+yLog = [];
+thetaLog = [];
+tLog = [];
+filterTic = tic;
 %% 
 %Main loop
 
@@ -173,10 +201,80 @@ while true
     %% 
     %filter
 
-    %hand written Estimate, (replace)
-    objectCenter = [0, distance];
-    objectAngle = angle;
-    
+   validMeasurement = r1 < maxRange && r2 < maxRange && distance > 2 && distance < maxRange;
+
+if validMeasurement
+
+    if ~filterInitialized
+        yEst = distance;
+        thetaEst = angle;
+        yVel = 0;
+        yAcc = 0;
+        thetaVel = 0;
+        thetaAcc = 0;
+        filterInitialized = true;
+    end
+
+    % Predict y
+    yPred = yEst + yVel*dt + 0.5*yAcc*dt^2;
+    yVelPred = yVel + yAcc*dt;
+    yAccPred = yAcc;
+
+    % Predict theta
+    thetaPred = thetaEst + thetaVel*dt + 0.5*thetaAcc*dt^2;
+    thetaVelPred = thetaVel + thetaAcc*dt;
+    thetaAccPred = thetaAcc;
+    thetaPred = wrapToPiLocal(thetaPred);
+
+    % Innovation
+    yErr = distance - yPred;
+    thetaErr = wrapToPiLocal(angle - thetaPred);
+
+    % Reject severe outliers
+    if abs(yErr) < 80 && abs(thetaErr) < deg2rad(45)
+
+        % Correct y
+        yEst = yPred + alphaY*yErr;
+        yVel = yVelPred + betaY*yErr/dt;
+        yAcc = yAccPred + gammaY*2*yErr/(dt^2);
+
+        % Correct theta
+        thetaEst = thetaPred + alphaT*thetaErr;
+        thetaVel = thetaVelPred + betaT*thetaErr/dt;
+        thetaAcc = thetaAccPred + gammaT*2*thetaErr/(dt^2);
+
+    else
+        % Prediction only
+        yEst = yPred;
+        yVel = yVelPred;
+        yAcc = yAccPred;
+
+        thetaEst = thetaPred;
+        thetaVel = thetaVelPred;
+        thetaAcc = thetaAccPred;
+    end
+
+else
+    % Prediction only if bad reading
+    yEst = yEst + yVel*dt + 0.5*yAcc*dt^2;
+    yVel = yVel + yAcc*dt;
+
+    thetaEst = thetaEst + thetaVel*dt + 0.5*thetaAcc*dt^2;
+    thetaVel = thetaVel + thetaAcc*dt;
+end
+
+% Clamp to physical limits
+yEst = min(max(yEst, 2), 400);
+thetaEst = wrapToPiLocal(thetaEst);
+thetaEst = min(max(thetaEst, deg2rad(-35)), deg2rad(35));
+
+objectCenter = [xEst, yEst];
+objectAngle = thetaEst;
+
+xLog(end+1) = objectCenter(1);
+yLog(end+1) = objectCenter(2);
+thetaLog(end+1) = objectAngle;
+tLog(end+1) = toc(filterTic);
     %% 
     %Plot loop
     
@@ -221,4 +319,8 @@ function echoWidths = getEchoWidths(echo, echoThresh)
             end
         end
     end
+end
+
+function a = wrapToPiLocal(a)
+    a = mod(a + pi, 2*pi) - pi;
 end
