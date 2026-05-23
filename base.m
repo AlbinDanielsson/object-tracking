@@ -3,8 +3,8 @@ clc;
 
 %initial parameters
 l = 15.4; %cm
-objectWidth = 22; %cm
-objectCenter = [0, 30];%cm
+objectWidth = 100; %cm
+objectCenter = [0, 400];%cm
 objectAngle = 0;%rads
 
 pause(10);
@@ -143,27 +143,7 @@ yObj = [objectCenter(2) - sin(objectAngle)*objectWidth/2, ...
 hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 
 %% 
-%Setting up EKF
-X = [objectCenter(1); objectCenter(2); objectAngle];
-x_pred = [0, 0, 0];
-
-%Parameters, TODO update/replace
-sigma_x = 10; %cm per timestep
-sigma_y = 3;
-sigma_theta = deg2rad(5); % rad
-
-sigma_r = 2.5; %cm sensor noise
-P = diag([5^2, 5^2, deg2rad(20)^2]);
-
-%derived
-Q = diag([sigma_x^2, sigma_y^2, sigma_theta^2]);
-W = diag([sigma_r^2, sigma_r^2]);
-
-%Initialize others
-P_pred = zeros(3, 3);
-H = zeros(2, 3);
-Z = zeros(2, 1);
-z_pred = zeros(2, 1);
+%Setting up filter
 
 %% 
 %Main loop
@@ -198,55 +178,12 @@ while true
     distance = flatObjectDistance(r1, r2);
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
-    validSensors = true;
-    if abs(r1 - r2) > l %(impossible)
-        validSensors = false;
-    end
-    if angle > pi/10 %should not be possible
-        validSensors = false;
-    end
-    
-    if validSensors == false
-        %fprintf("\nSKIP!\n\n");
-        continue
-    end
-
     %% 
-    %EKF loop
-    X_pred = [X(1) + vel(1)*dt;
-          X(2) + vel(2)*dt;
-          wrapToPi(X(3) + omega*dt)];
+    %filter
 
-    %Calculate H
-    H = calculateH(X(3), l);
-
-    %F_x, jacobian
-    F_x = eye(3);
-
-    %P_pred
-    P_pred = F_x * P * F_x' + Q;
-
-    %Innovation
-    z_pred(1) = expectedSensorReading(X, -l/2, objectWidth, 400, sensorEA);
-    z_pred(2) = expectedSensorReading(X, l/2, objectWidth, 400, sensorEA);
-    Z = [r1; r2]; %real reading
-    v = Z - z_pred;
-
-    %Kalman update and gain equations
-    S = H*P_pred*H' + W;
-    K = P_pred * H' / S;
-
-    %correction equations
-    X = X_pred + K * v;
-    X(3) = wrapToPi(X(3));
-    P = (eye(3) - K*H) * P_pred;
-
-    objectCenter = X(1:2)';
-    objectAngle = X(3);
-
-    %Hand written Estimate
-    %objectCenter = [0, distance];
-    %objectAngle = angle;
+    %hand written Estimate, (replace)
+    objectCenter = [0, distance];
+    objectAngle = angle;
     
     %% 
     %Plot loop
@@ -266,9 +203,9 @@ while true
     lastPos = objectCenter;
 
     %fprintf('errors: %.1f, %.1f\n', error1, error2);
-    %fprintf('velocity: %.1f, %.1f\n', vel);
+    fprintf('velocity: %.1f, %.1f\n', vel);
 
-    %fprintf('position: %.1f, %.1f\n\n', objectCenter);
+    fprintf('position: %.1f, %.1f\n\n', objectCenter);
 end
 
 %%
