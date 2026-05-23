@@ -2,8 +2,11 @@ clc, clear all
 l = 15.4; %cm
 
 objectWidth = 100; %cm
-    objectCenter = [0, 300];%cm
-    objectAngle = 0;%rads
+objectCenter = [0, 300];%cm
+objectAngle = 0;%rads
+
+sensorEA = pi/90;
+sesorDeg = 2;
 
 figure;
 hold on;
@@ -40,7 +43,7 @@ ySensor = [0, 0];
 for k = 1:length(xSensor)
 
     % Left and right cone boundary slopes
-    dx = 400 * tand(7.5);
+    dx = 400 * tand(2);
 
     xLeft  = xSensor(k) - dx;
     xRight = xSensor(k) + dx;

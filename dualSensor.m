@@ -112,7 +112,7 @@ while ishandle(hEcho1)
 
     error1 = r1 - closestPointOnPlane(angle, r1);
     error2 = r2 - closestPointOnPlane(angle, r2);
-    fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
+    %fprintf('e1 = %.1f, e2 = %.1f \n\n', error1, error2);
 
     set(hEcho1, 'YData', echo1);
     set(hEcho2, 'YData', echo2);
