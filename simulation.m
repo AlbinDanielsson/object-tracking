@@ -1,11 +1,11 @@
 clc, clear all
 l = 15.4; %cm
 
-objectWidth = 100; %cm
-objectCenter = [0, 300];%cm
-objectAngle = 0;%rads
+objectWidth = 80; %cm
+objectCenter = [10, 150];%cm
+objectAngle = pi/10;%rads
 
-sensorEA = pi/90;
+sensorEA = pi/20;
 sesorDeg = 2;
 
 figure;

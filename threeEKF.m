@@ -4,13 +4,17 @@ clc;
 %initial parameters
 l = 15.4; %cm
 objectWidth = 20; %cm
-objectCenter = [0, 30];%cm
+objectCenter = [0, 15];%cm
 objectAngle = 0;%rads
 
 sensorEA = pi/20;
 sensorDeg = 8.5;
 
 dt = 0.4; %TODO, calculate!
+
+%Velocity calculation
+vel = [0, 0];
+omega = 0;
 
 %%
 % Setting up signals
@@ -56,11 +60,6 @@ pulse = [pulse; zeros(cycleLength,2)];
 
 [data, time] = readwrite(myDaq, pulse);
 
-t = seconds(data.Time);
-
-echo1 = data{:,1};   % ai0
-echo2 = data{:,2};   % ai1
-
 echoThresh = 2;
 %% 
 % setting up plot
@@ -96,7 +95,6 @@ xlabel('x');
 ylabel('y');
 box on;
 xSensor = [l/2, -l/2];
-ySensor = [0, 0];
 
 for k = 1:length(xSensor)
 
@@ -135,36 +133,28 @@ yObj = [objectCenter(2) - sin(objectAngle)*objectWidth/2, ...
 hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 
 %% 
-%Setting up filter
-% Alpha-beta-gamma filter state
-xEst = 0;
+%Setting up EKF
+X = [objectCenter(1); objectCenter(2); objectAngle];
+x_pred = [0, 0, 0];
 
-yEst = objectCenter(2);
-yVel = 0;
-yAcc = 0;
+%Parameters, TODO update/replace
+sigma_x = 3; %cm per timestep
+sigma_y = 10;
+sigma_theta = deg2rad(5); % rad
 
-thetaEst = objectAngle;
-thetaVel = 0;
-thetaAcc = 0;
+sigma_r = 2.5; %cm sensor noise
+P = diag([5^2, 5^2, deg2rad(20)^2]);
 
-filterInitialized = false;
+%derived
+Q = diag([sigma_x^2, sigma_y^2, sigma_theta^2]);
+W = diag([sigma_r^2, sigma_r^2]);
 
-% Tuning: increase alpha for faster response, decrease for smoother output
-alphaY = 0.55;
-betaY  = 0.20;
-gammaY = 0.04;
+%Initialize others
+P_pred = zeros(3, 3);
+H = zeros(2, 3);
+Z = zeros(2, 1);
+z_pred = zeros(2, 1);
 
-alphaT = 0.50;
-betaT  = 0.18;
-gammaT = 0.03;
-
-maxRange = 350;
-
-xLog = [];
-yLog = [];
-thetaLog = [];
-tLog = [];
-filterTic = tic;
 %% 
 %Main loop
 
@@ -198,83 +188,43 @@ while true
     distance = flatObjectDistance(r1, r2);
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
+    if ~isValid(r1, r2)
+        fprintf("SKIP\n");
+        continue
+    end
+
     %% 
-    %filter
+    %EKF loop
+    X_pred = X;
 
-   validMeasurement = r1 < maxRange && r2 < maxRange && distance > 2 && distance < maxRange;
+    %Calculate H
+    H = calculateH(X(3), l);
 
-if validMeasurement
+    %F_x, jacobian
+    F_x = eye(3);
 
-    if ~filterInitialized
-        yEst = distance;
-        thetaEst = angle;
-        yVel = 0;
-        yAcc = 0;
-        thetaVel = 0;
-        thetaAcc = 0;
-        filterInitialized = true;
-    end
+    %P_pred
+    P_pred = F_x * P * F_x' + Q;
 
-    % Predict y
-    yPred = yEst + yVel*dt + 0.5*yAcc*dt^2;
-    yVelPred = yVel + yAcc*dt;
-    yAccPred = yAcc;
+    %Innovation
+    z_pred(1) = expectedSensorReading(X, -l/2, objectWidth, 400, sensorEA);
+    z_pred(2) = expectedSensorReading(X, l/2, objectWidth, 400, sensorEA);
+    Z = [r1; r2]; %real reading
+    v = Z - z_pred;
 
-    % Predict theta
-    thetaPred = thetaEst + thetaVel*dt + 0.5*thetaAcc*dt^2;
-    thetaVelPred = thetaVel + thetaAcc*dt;
-    thetaAccPred = thetaAcc;
-    thetaPred = wrapToPiLocal(thetaPred);
+    %Kalman update and gain equations
+    S = H*P_pred*H' + W;
+    K = P_pred * H' / S;
 
-    % Innovation
-    yErr = distance - yPred;
-    thetaErr = wrapToPiLocal(angle - thetaPred);
+    %correction equations
+    X = X_pred + K * v;
+    X(3) = wrapToPi(X(3));
+    P = P_pred - K*H*P_pred;
 
-    % Reject severe outliers
-    if abs(yErr) < 80 && abs(thetaErr) < deg2rad(45)
+    objectCenter = X(1:2)';
+    objectAngle = X(3);
 
-        % Correct y
-        yEst = yPred + alphaY*yErr;
-        yVel = yVelPred + betaY*yErr/dt;
-        yAcc = yAccPred + gammaY*2*yErr/(dt^2);
-
-        % Correct theta
-        thetaEst = thetaPred + alphaT*thetaErr;
-        thetaVel = thetaVelPred + betaT*thetaErr/dt;
-        thetaAcc = thetaAccPred + gammaT*2*thetaErr/(dt^2);
-
-    else
-        % Prediction only
-        yEst = yPred;
-        yVel = yVelPred;
-        yAcc = yAccPred;
-
-        thetaEst = thetaPred;
-        thetaVel = thetaVelPred;
-        thetaAcc = thetaAccPred;
-    end
-
-else
-    % Prediction only if bad reading
-    yEst = yEst + yVel*dt + 0.5*yAcc*dt^2;
-    yVel = yVel + yAcc*dt;
-
-    thetaEst = thetaEst + thetaVel*dt + 0.5*thetaAcc*dt^2;
-    thetaVel = thetaVel + thetaAcc*dt;
-end
-
-% Clamp to physical limits
-yEst = min(max(yEst, 2), 400);
-thetaEst = wrapToPiLocal(thetaEst);
-thetaEst = min(max(thetaEst, deg2rad(-35)), deg2rad(35));
-
-objectCenter = [xEst, yEst];
-objectAngle = thetaEst;
-
-xLog(end+1) = objectCenter(1);
-yLog(end+1) = objectCenter(2);
-thetaLog(end+1) = objectAngle;
-tLog(end+1) = toc(filterTic);
+    
     %% 
     %Plot loop
     
@@ -285,8 +235,6 @@ tLog(end+1) = toc(filterTic);
             objectCenter(2) + sin(objectAngle)*objectWidth/2];
     set(hObj, 'XData', xObj, 'YData', yObj);
     drawnow
-
-    fprintf('position: %.1f, %.1f\n\n', objectCenter);
 end
 
 %%
@@ -319,8 +267,4 @@ function echoWidths = getEchoWidths(echo, echoThresh)
             end
         end
     end
-end
-
-function a = wrapToPiLocal(a)
-    a = mod(a + pi, 2*pi) - pi;
 end

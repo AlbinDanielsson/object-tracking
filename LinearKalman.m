@@ -3,22 +3,14 @@ clc;
 
 %initial parameters
 l = 15.4; %cm
-objectWidth = 22; %cm
-objectCenter = [0, 30];%cm
+objectWidth = 20; %cm
+objectCenter = [0, 15];%cm
 objectAngle = 0;%rads
-
-pause(10);
 
 sensorEA = pi/20;
 sensorDeg = 8.5;
 
 dt = 0.4; %TODO, calculate!
-
-%Velocity calculation
-vel = [0, 0];
-omega = 0;
-lastPos = objectCenter;
-lastAngle = objectAngle;
 
 %%
 % Setting up signals
@@ -143,28 +135,25 @@ yObj = [objectCenter(2) - sin(objectAngle)*objectWidth/2, ...
 hObj = plot(xObj, yObj, 'color', 'blue', 'LineWidth', 3);
 
 %% 
-%Setting up EKF
-X = [objectCenter(1); objectCenter(2); objectAngle];
-x_pred = [0, 0, 0];
+%Setting up filter
+% State: [x; y; theta; vx; vy; omega]
+Xhat = [0; 400; 0; 0; 0; 0];
 
-%Parameters, TODO update/replace
-sigma_x = 10; %cm per timestep
-sigma_y = 3;
-sigma_theta = deg2rad(5); % rad
+sigma_x = 5;
+sigma_y = 80;
+sigma_theta = 30; %degrees
+sigma_vx = 5;
+sigma_vy = 30;
+sigma_omega = 20;
+P = diag([sigma_x^2, sigma_y^2, deg2rad(sigma_theta)^2, sigma_vx^2, sigma_vy^2, deg2rad(sigma_omega)^2]);
 
-sigma_r = 2.5; %cm sensor noise
-P = diag([5^2, 5^2, deg2rad(20)^2]);
 
-%derived
-Q = diag([sigma_x^2, sigma_y^2, sigma_theta^2]);
-W = diag([sigma_r^2, sigma_r^2]);
+Q = diag([0.1, 2, deg2rad(1)^2, 0.1, 10, deg2rad(5)^2]);
 
-%Initialize others
-P_pred = zeros(3, 3);
-H = zeros(2, 3);
-Z = zeros(2, 1);
-z_pred = zeros(2, 1);
+% Measurement: [x; y; theta]
+R = diag([2^2, 8^2, deg2rad(5)^2]);
 
+filterInitialized = false;
 %% 
 %Main loop
 
@@ -198,55 +187,66 @@ while true
     distance = flatObjectDistance(r1, r2);
     fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
-    validSensors = true;
-    if abs(r1 - r2) > l %(impossible)
-        validSensors = false;
-    end
-    if angle > pi/10 %should not be possible
-        validSensors = false;
-    end
-    
-    if validSensors == false
-        %fprintf("\nSKIP!\n\n");
-        continue
-    end
-
     %% 
-    %EKF loop
-    X_pred = [X(1) + vel(1)*dt;
-          X(2) + vel(2)*dt;
-          wrapToPi(X(3) + omega*dt)];
+    %filter
+    % Reject invalid max-range readings
+    validMeasurement = isValid(r1, r2);
 
-    %Calculate H
-    H = calculateH(X(3), l);
+    if validMeasurement
 
-    %F_x, jacobian
-    F_x = eye(3);
+        z = [0; distance; angle];
 
-    %P_pred
-    P_pred = F_x * P * F_x' + Q;
+        if ~filterInitialized
+            Xhat = [0; distance; angle; 0; 0; 0];
+            filterInitialized = true;
+        end
 
-    %Innovation
-    z_pred(1) = expectedSensorReading(X, -l/2, objectWidth, 400, sensorEA);
-    z_pred(2) = expectedSensorReading(X, l/2, objectWidth, 400, sensorEA);
-    Z = [r1; r2]; %real reading
-    v = Z - z_pred;
+        F = [1 0 0 dt 0  0;
+            0 1 0 0  dt 0;
+            0 0 1 0  0  dt;
+            0 0 0 1  0  0;
+            0 0 0 0  1  0;
+            0 0 0 0  0  1];
 
-    %Kalman update and gain equations
-    S = H*P_pred*H' + W;
-    K = P_pred * H' / S;
+        Xhat = F * Xhat;
+        Xhat(3) = wrapToPiLocal(Xhat(3));
+        P = F * P * F' + Q;
 
-    %correction equations
-    X = X_pred + K * v;
-    X(3) = wrapToPi(X(3));
-    P = (eye(3) - K*H) * P_pred;
+        H = [1 0 0 0 0 0;
+            0 1 0 0 0 0;
+            0 0 1 0 0 0];
 
-    objectCenter = X(1:2)';
-    objectAngle = X(3);
+        innovation = z - H * Xhat;
+        innovation(3) = wrapToPiLocal(innovation(3));
 
-    %Hand written Estimate
-    %objectCenter = [0, distance];
-    %objectAngle = angle;
+        S = H * P * H' + R;
+        K = P * H' / S;
+
+        gate = innovation' / S * innovation;
+
+        if gate < 25
+            Xhat = Xhat + K * innovation;
+            P = (eye(6) - K * H) * P;
+        end
+
+        Xhat(3) = wrapToPiLocal(Xhat(3));
+
+    else
+        % Prediction only if reading is bad
+        F = [1 0 0 dt 0  0;
+            0 1 0 0  dt 0;
+            0 0 1 0  0  dt;
+            0 0 0 1  0  0;
+            0 0 0 0  1  0;
+            0 0 0 0  0  1];
+
+        Xhat = F * Xhat;
+        Xhat(3) = wrapToPiLocal(Xhat(3));
+        P = F * P * F' + Q;
+    end
+
+    objectCenter = Xhat(1:2)';
+    objectAngle = Xhat(3);
     
     %% 
     %Plot loop
@@ -259,16 +259,8 @@ while true
     set(hObj, 'XData', xObj, 'YData', yObj);
     drawnow
 
-    %Update velocities
-    omega = (objectAngle - lastAngle)/dt;
-    lastAngle = objectAngle;
-    vel = (objectCenter - lastPos)/dt;
-    lastPos = objectCenter;
-
-    %fprintf('errors: %.1f, %.1f\n', error1, error2);
-    %fprintf('velocity: %.1f, %.1f\n', vel);
-
-    %fprintf('position: %.1f, %.1f\n\n', objectCenter);
+    fprintf('position: %.1f, %.1f\n', objectCenter);
+    fprintf('EKF\n\n')
 end
 
 %%
@@ -301,4 +293,8 @@ function echoWidths = getEchoWidths(echo, echoThresh)
             end
         end
     end
+end
+
+function a = wrapToPiLocal(a)
+    a = mod(a + pi, 2*pi) - pi;
 end
