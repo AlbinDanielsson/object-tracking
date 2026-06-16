@@ -4,12 +4,14 @@ clc;
 %testing Params
 maxSample = 20;
 samplesPerState = 2;
-pauseLength = 3; %seconds
+pauseLength = 6; %seconds
 
 %Real values 
-realY = [15, 20, 25, 30, 40, ...
-        35, 30, 10, 10, 50];
-realAngle = zeros(1, 10);
+
+%Real values 
+realY = zeros(1, 10) + 110; 
+realAngle = [0, 10, , 0, -2, ...
+        5, -5, 0, 10, -10];
 realX = zeros(1, 10);
 
 %Error vectors
@@ -20,7 +22,7 @@ seenAngle = zeros(1, 20);
 %initial parameters
 l = 15.4; %cm
 objectWidth = 22; %cm
-objectCenter = [0, 15];%cm
+objectCenter = [0, 110];%cm
 objectAngle = 0;%rads
 
 sensorEA = pi/20;
@@ -116,6 +118,7 @@ Q = diag([0.1, 2, deg2rad(1)^2, 0.1, 10, deg2rad(5)^2]);
 R = diag([2^2, 8^2, deg2rad(5)^2]);
 
 filterInitialized = false;
+
 %% 
 %Main loop
 
@@ -208,7 +211,7 @@ for samples = 1:1:maxSample
     end
 
     objectCenter = Xhat(1:2)';
-    objectAngle = Xhat(3); 
+    objectAngle = Xhat(3);
 
     seenX(samples) = objectCenter(1);
     seenY(samples) = objectCenter(2);
@@ -284,4 +287,4 @@ end
 
 function a = wrapToPiLocal(a)
     a = mod(a + pi, 2*pi) - pi;
-    endfxf
+end

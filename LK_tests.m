@@ -4,14 +4,14 @@ clc;
 %testing Params
 maxSample = 20;
 samplesPerState = 2;
-pauseLength = 4; %seconds
+pauseLength = 6; %seconds
+
+pause(5);
 
 %Real values 
-
-%Real values 
-realY = [15, 20, 25, 30, 40, ...
-        35, 30, 10, 10, 50];
-realAngle = zeros(1, 10);
+realY = zeros(1, 10) + 110; 
+realAngle = [0, 10, 20, 30, 0, ...
+        -10, 10, -20, -30, 0];
 realX = zeros(1, 10);
 
 %Error vectors
@@ -20,9 +20,9 @@ seenX = zeros(1, 20);
 seenAngle = zeros(1, 20);
 
 %initial parameters
-l = 8.4; %cm
-objectWidth = 22; %cm
-objectCenter = [0, 15];%cm
+l = 15.4; %cm
+objectWidth = 100; %cm
+objectCenter = [0, 110];%cm
 objectAngle = 0;%rads
 
 sensorEA = pi/20;
@@ -100,22 +100,17 @@ hText = text(0.5, 0.5, "", ...
 
 %% 
 %Setting up filter
-% State: [x; y; theta; vx; vy; omega]
-Xhat = [0; 400; 0; 0; 0; 0];
+% True EKF state: [x; y; theta; vx; vy; omega]
+Xhat = [0; objectCenter(2); objectAngle; 0; 0; 0];
 
-sigma_x = 5;
-sigma_y = 80;
-sigma_theta = 30; %degrees
-sigma_vx = 5;
-sigma_vy = 30;
-sigma_omega = 20;
-P = diag([sigma_x^2, sigma_y^2, deg2rad(sigma_theta)^2, sigma_vx^2, sigma_vy^2, deg2rad(sigma_omega)^2]);
-
-
+P = diag([5^2, 80^2, deg2rad(30)^2, 5^2, 30^2, deg2rad(20)^2]);
 Q = diag([0.1, 2, deg2rad(1)^2, 0.1, 10, deg2rad(5)^2]);
 
-% Measurement: [x; y; theta]
-R = diag([2^2, 8^2, deg2rad(5)^2]);
+% Measurement: [r1; r2]
+R = diag([6^2, 6^2]);
+
+maxRange = 350;
+sensorEA = deg2rad(sensorDeg);
 
 filterInitialized = false;
 
@@ -154,35 +149,41 @@ for samples = 1:1:maxSample
 
     %% 
     %filter
-    % Reject invalid max-range readings
-    validMeasurement = isValid(r1, r2);
+   validMeasurement = isValid(r1, r2);
+    % State transition
+    F = [1 0 0 dt 0  0;
+        0 1 0 0  dt 0;
+        0 0 1 0  0  dt;
+        0 0 0 1  0  0;
+        0 0 0 0  1  0;
+        0 0 0 0  0  1];
+
+    if validMeasurement && ~filterInitialized
+        angle0 = flatObjectAngle(r1, r2, l);
+        distance0 = flatObjectDistance(r1, r2);
+        Xhat = [0; distance0; angle0; 0; 0; 0];
+        filterInitialized = true;
+    end
+
+    % ---------- Prediction ----------
+    Xhat = F * Xhat;
+    Xhat(3) = wrapToPiLocal(Xhat(3));
+    P = F * P * F' + Q;
 
     if validMeasurement
 
-        z = [0; distance; angle];
+        z = [r1; r2];
 
-        if ~filterInitialized
-            Xhat = [0; distance; angle; 0; 0; 0];
-            filterInitialized = true;
-        end
+        hFun = @(X) [
+            expectedSensorReading(X(1:3),  l/2, objectWidth, maxRange, sensorEA);
+            expectedSensorReading(X(1:3), -l/2, objectWidth, maxRange, sensorEA)
+        ];
 
-        F = [1 0 0 dt 0  0;
-            0 1 0 0  dt 0;
-            0 0 1 0  0  dt;
-            0 0 0 1  0  0;
-            0 0 0 0  1  0;
-            0 0 0 0  0  1];
+        % ---------- Correction ----------
+        zPred = hFun(Xhat);
+        H = numericalJacobian(hFun, Xhat);
 
-        Xhat = F * Xhat;
-        Xhat(3) = wrapToPiLocal(Xhat(3));
-        P = F * P * F' + Q;
-
-        H = [1 0 0 0 0 0;
-            0 1 0 0 0 0;
-            0 0 1 0 0 0];
-
-        innovation = z - H * Xhat;
-        innovation(3) = wrapToPiLocal(innovation(3));
+        innovation = z - zPred;
 
         S = H * P * H' + R;
         K = P * H' / S;
@@ -190,24 +191,10 @@ for samples = 1:1:maxSample
         gate = innovation' / S * innovation;
 
         if gate < 25
-            Xhat = Xhat + K * innovation;
-            P = (eye(6) - K * H) * P;
+    Xhat = Xhat + K * innovation;
+    Xhat(3) = wrapToPiLocal(Xhat(3));
+    P = (eye(6) - K * H) * P;
         end
-
-        Xhat(3) = wrapToPiLocal(Xhat(3));
-
-    else
-        % Prediction only if reading is bad
-        F = [1 0 0 dt 0  0;
-            0 1 0 0  dt 0;
-            0 0 1 0  0  dt;
-            0 0 0 1  0  0;
-            0 0 0 0  1  0;
-            0 0 0 0  0  1];
-
-        Xhat = F * Xhat;
-        Xhat(3) = wrapToPiLocal(Xhat(3));
-        P = F * P * F' + Q;
     end
 
     objectCenter = Xhat(1:2)';
@@ -227,7 +214,7 @@ stateIndex = ceil(samples / samplesPerState);
 
 % Show current realY in large text
 set(hText, ...
-    'String', sprintf('Y = %.0f cm', realY(stateIndex)), ...
+    'String', sprintf('a = %.0f deg', realAngle(stateIndex)), ...
     'Color', 'black');
 
 drawnow;
@@ -241,7 +228,7 @@ if mod(samples, samplesPerState) == 0 && samples < maxSample
     nextStateIndex = stateIndex + 1;
 
     set(hText, ...
-        'String', sprintf('MOVE TO\nY = %.0f cm', realY(nextStateIndex)), ...
+        'String', sprintf('MOVE TO\na = %.0f deg', realAngle(nextStateIndex)), ...
         'Color', 'red');
 
     drawnow;
@@ -287,4 +274,29 @@ end
 
 function a = wrapToPiLocal(a)
     a = mod(a + pi, 2*pi) - pi;
+end
+
+%%helpers
+function H = numericalJacobian(hFun, X)
+    z0 = hFun(X);
+    n = numel(X);
+    m = numel(z0);
+    H = zeros(m, n);
+
+    for i = 1:n
+        dX = zeros(n,1);
+
+        if i == 3 || i == 6
+            step = 1e-4;
+        else
+            step = 1e-3;
+        end
+
+        dX(i) = step;
+
+        zp = hFun(X + dX);
+        zm = hFun(X - dX);
+
+        H(:,i) = (zp - zm) / (2 * step);
+    end
 end
