@@ -108,7 +108,7 @@ while ishandle(hEcho1)
 
     angle = flatObjectAngle(r1, r2, l);
     distance = flatObjectDistance(r1, r2);
-    fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
+    %fprintf('angle %.1f, distance %.1f \n', angle * 180/pi, distance);
 
     error1 = r1 - closestPointOnPlane(angle, r1);
     error2 = r2 - closestPointOnPlane(angle, r2);
